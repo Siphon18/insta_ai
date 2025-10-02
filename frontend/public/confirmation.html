@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>AI Persona Generator</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
+    rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#E1306C",
+            "background-light": "#f6f7f8",
+            "background-dark": "#101c22",
+          },
+          fontFamily: {
+            display: ["Space Grotesk", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+            lg: "1rem",
+            xl: "1.5rem",
+            full: "9999px",
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body {
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    @keyframes fade-in-up {
+      0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .animate-fade-in-up {
+      animation: fade-in-up 0.6s ease-out forwards;
+    }
+  </style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-800 dark:text-slate-200">
+  <div class="flex flex-col min-h-screen">
+    <header class="w-full">
+      <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-20 border-b border-slate-200/50 dark:border-slate-800/50">
+          <div class="flex items-center gap-3">
+            <svg class="h-8 w-8 text-primary" fill="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919C8.416 2.175 8.796 2.163 12 2.163zm0 1.441c-3.117 0-3.483.011-4.692.068-2.617.119-3.83 1.341-3.951 3.951-.057 1.209-.068 1.575-.068 4.692s.011 3.483.068 4.692c.121 2.61 1.334 3.832 3.951 3.951 1.209.057 1.575.068 4.692.068s3.483-.011 4.692-.068c2.617-.119 3.83-1.341 3.951-3.951.057-1.209.068-1.575.068-4.692s-.011-3.483-.068-4.692c-.121-2.61-1.334-3.832-3.951-3.951C15.483 3.615 15.117 3.604 12 3.604zm0 4.881c-2.344 0-4.25 1.906-4.25 4.25s1.906 4.25 4.25 4.25 4.25-1.906 4.25-4.25-1.906-4.25-4.25-4.25zm0 7.001c-1.543 0-2.791-1.248-2.791-2.791s1.248-2.791 2.791-2.791 2.791 1.248 2.791 2.791-1.248 2.791-2.791 2.791zm5.235-7.391c-.633 0-1.145.513-1.145 1.146s.512 1.146 1.145 1.146 1.145-.513 1.145-1.146-.512-1.146-1.145-1.146z">
+              </path>
+            </svg>
+            <h1 class="text-xl font-bold text-slate-900 dark:text-white">AI Persona</h1>
+          </div>
+          <nav class="hidden md:flex items-center gap-8">
+            <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+              href="#">Home</a>
+            <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+              href="#">About</a>
+            <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+              href="#">Contact</a>
+          </nav>
+          <div class="flex items-center">
+            <a class="bg-primary text-white font-bold text-sm py-2 px-6 rounded-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105"
+              href="/login.html">
+              Log In
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main class="flex-grow flex items-center justify-center">
+      <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div class="max-w-xl mx-auto">
+          <div
+            class="bg-background-light dark:bg-slate-800/50 rounded-xl shadow-2xl shadow-primary/10 dark:shadow-primary/5 p-8 md:p-12 transition-all duration-500 transform scale-100 animate-fade-in-up">
+            <h2 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">
+              Confirm Persona
+            </h2>
+            <p class="text-lg text-slate-600 dark:text-slate-400 mb-8">
+              We've generated a persona based on the following profile. Please confirm to proceed.
+            </p>
+            <div id="profile-details" class="flex flex-col items-center justify-center gap-4 mb-8">
+              <img id="profile-pic" class="w-24 h-24 rounded-full border-2 border-primary"
+                src="https://via.placeholder.com/150" alt="Profile Picture" />
+              <div class="flex flex-col gap-1">
+                <span id="full-name" class="text-xl font-bold text-slate-900 dark:text-white"></span>
+                <span id="username" class="text-lg font-bold text-primary tracking-widest"></span>
+              </div>
+            </div>
+            <div class="bg-slate-100 dark:bg-slate-900/50 rounded-lg p-6 mb-8 text-left">
+              <p id="bio" class="text-sm text-slate-600 dark:text-slate-400"></p>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <a class="w-full sm:w-auto bg-primary text-white font-bold text-lg py-3 px-10 rounded-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105 inline-flex items-center justify-center shadow-lg shadow-primary/30"
+                href="/chat.html">
+                Confirm
+              </a>
+              <a class="w-full sm:w-auto bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-lg py-3 px-10 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-all duration-300 transform hover:scale-105 inline-flex items-center justify-center"
+                href="/add-username.html">
+                Edit
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const personaData = JSON.parse(localStorage.getItem('personaData'));
+      const profilePicElement = document.getElementById('profile-pic');
+      const placeholderPic = 'https://via.placeholder.com/150';
+
+      if (personaData && personaData.profile_pic_url) {
+        // Use the image proxy for the profile pic URL
+        const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(personaData.profile_pic_url)}`;
+        profilePicElement.src = proxyUrl;
+        profilePicElement.alt = `Profile picture of ${personaData.name}`;
+
+        document.getElementById('full-name').textContent = personaData.name;
+        document.getElementById('username').textContent = `@${personaData.username}`;
+        document.getElementById('bio').textContent = personaData.bio;
+
+        // Store the AI persona pic URL for the chat page
+        localStorage.setItem('aiPersonaPic', proxyUrl);
+      } else if (personaData) {
+        // If a profile exists but the URL is missing, use a placeholder
+        profilePicElement.src = placeholderPic;
+        profilePicElement.alt = `Profile picture of ${personaData.name}`;
+
+        document.getElementById('full-name').textContent = personaData.name;
+        document.getElementById('username').textContent = `@${personaData.username}`;
+        document.getElementById('bio').textContent = personaData.bio;
+
+        localStorage.setItem('aiPersonaPic', placeholderPic);
+      } else {
+        // Redirect if there's no data at all
+        window.location.href = '/add-username.html';
+      }
+    });
+  </script>
+</body>
+
+</html>

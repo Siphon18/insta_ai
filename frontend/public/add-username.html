@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>AI Persona Generator</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <style>
+        @keyframes user-reveal {
+            0% {
+                opacity: 0;
+                letter-spacing: -1em;
+                transform: translateY(20px);
+            }
+
+            100% {
+                opacity: 1;
+                letter-spacing: normal;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-user-reveal {
+            animation: user-reveal 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#13a4ec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101c22",
+                    },
+                    fontFamily: {
+                        display: ["Space Grotesk", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.5rem",
+                        lg: "1rem",
+                        xl: "1.5rem",
+                        full: "9999px",
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        body {
+            font-family: "Space Grotesk", sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-800 dark:text-slate-200">
+    <div class="flex flex-col min-h-screen">
+        <header class="w-full">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div
+                    class="flex items-center justify-between h-20 border-b border-slate-200/50 dark:border-slate-800/50">
+                    <div class="flex items-center gap-3">
+                        <svg class="text-primary" fill="none" height="24" viewBox="0 0 24 24" width="24"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 4C14.76 4 17.1 5.44 18.43 7.57L16.22 9.78C15.26 8.82 13.74 8.25 12 8.25C10.26 8.25 8.74 8.82 7.78 9.78L5.57 7.57C6.9 5.44 9.24 4 12 4ZM12 20C9.24 20 6.9 18.56 5.57 16.43L7.78 14.22C8.74 15.18 10.26 15.75 12 15.75C13.74 15.75 15.26 15.18 16.22 14.22L18.43 16.43C17.1 18.56 14.76 20 12 20Z"
+                                fill="currentColor"></path>
+                        </svg>
+                        <h1 class="text-xl font-bold text-slate-900 dark:text-white">AI Persona</h1>
+                    </div>
+                    <nav class="hidden md:flex items-center gap-8">
+                        <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+                            href="#">Home</a>
+                        <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+                            href="#">About</a>
+                        <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+                            href="#">Contact</a>
+                    </nav>
+                    <div class="flex items-center">
+                        <a href="login.html"
+                            class="bg-primary text-white font-bold text-sm py-2 px-6 rounded-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105">
+                            Log In
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <main class="flex-grow flex items-center justify-center">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <div class="max-w-xl mx-auto">
+                    <h2
+                        class="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight mb-4">
+                        Discover a New Persona
+                    </h2>
+                    <p class="text-lg text-slate-600 dark:text-slate-400 mb-10">
+                        Enter an Instagram username to generate an AI-powered personality profile based on their public
+                        activity.
+                    </p>
+                    <form id="persona-form" class="max-w-md mx-auto">
+                        <div class="space-y-6">
+                            <div class="relative">
+                                <label for="username-input" class="sr-only">Username</label>
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <span class="text-slate-400 dark:text-slate-500">@</span>
+                                </div>
+                                <input id="username-input"
+                                    class="w-full pl-8 pr-4 py-4 bg-background-light dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all duration-300"
+                                    placeholder="username" type="text" name="username" required />
+                            </div>
+
+                            <div>
+                                <label for="voice-select" class="sr-only">Preferred Voice</label>
+                                <select id="voice-select" name="voice"
+                                    class="w-full py-4 px-3 bg-background-light dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all duration-300">
+                                    <option value="">Auto-detect voice from profile</option>
+                                    </select>
+                            </div>
+                        </div>
+
+                        <div class="mt-8">
+                            <button type="submit"
+                                class="w-full sm:w-auto bg-primary text-white font-bold text-lg py-4 px-12 rounded-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-primary/30">
+                                Generate Persona
+                            </button>
+                        </div>
+                    </form>
+                    <div id="loading-state" class="hidden mt-8 flex flex-col items-center gap-4 text-center">
+                        <div class="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent">
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-400">Generating persona...</p>
+                    </div>
+
+                    <div id="error-message"
+                        class="hidden mt-4 p-4 rounded-lg bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200">
+                        <p></p>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const personaForm = document.getElementById('persona-form');
+            const usernameInput = document.getElementById('username-input');
+            const voiceSelect = document.getElementById('voice-select'); // Get the select element
+            const loadingState = document.getElementById('loading-state');
+            const errorMessageDiv = document.getElementById('error-message');
+            const submitButton = personaForm.querySelector('button');
+
+            // --- NEW: Function to load voices into the dropdown ---
+            async function loadVoices() {
+                try {
+                    const response = await fetch('/get-voices');
+                    if (!response.ok) return; // Fail silently if voices can't be loaded
+                    const voices = await response.json();
+
+                    const maleOptgroup = document.createElement('optgroup');
+                    maleOptgroup.label = 'Male Voices';
+                    voices.male.forEach(voice => {
+                        const option = document.createElement('option');
+                        option.value = voice.voiceId;
+                        option.textContent = `${voice.voiceId} (${voice.description})`;
+                        maleOptgroup.appendChild(option);
+                    });
+
+                    const femaleOptgroup = document.createElement('optgroup');
+                    femaleOptgroup.label = 'Female Voices';
+                    voices.female.forEach(voice => {
+                        const option = document.createElement('option');
+                        option.value = voice.voiceId;
+                        option.textContent = `${voice.voiceId} (${voice.description})`;
+                        femaleOptgroup.appendChild(option);
+                    });
+
+                    voiceSelect.appendChild(maleOptgroup);
+                    voiceSelect.appendChild(femaleOptgroup);
+                } catch (error) {
+                    console.error('Could not load voice options:', error);
+                }
+            }
+
+            // --- MODIFIED: Event listener for form submission ---
+            personaForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const username = usernameInput.value;
+                const voiceId = voiceSelect.value; // Get the selected voice ID
+
+                errorMessageDiv.classList.add('hidden');
+                errorMessageDiv.querySelector('p').textContent = '';
+                loadingState.classList.remove('hidden');
+                submitButton.disabled = true;
+
+                try {
+                    // Include both username and voiceId in the request body
+                    const res = await fetch('/generate-persona', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, voiceId }) // Updated body
+                    });
+
+                    const data = await res.json();
+                    if (res.ok) {
+                        localStorage.setItem('personaData', JSON.stringify(data.personaDetails));
+                        window.location.href = '/confirmation.html'; // Redirects as per original file
+                    } else {
+                        errorMessageDiv.classList.remove('hidden');
+                        errorMessageDiv.querySelector('p').textContent = data.error;
+                    }
+                } catch (error) {
+                    console.error('Frontend error:', error);
+                    errorMessageDiv.classList.remove('hidden');
+                    errorMessageDiv.querySelector('p').textContent = 'A network error occurred. Please try again later.';
+                } finally {
+                    loadingState.classList.add('hidden');
+                    submitButton.disabled = false;
+                }
+            });
+
+            // Load the voices when the page is ready
+            loadVoices();
+        });
+    </script>
+</body>
+
+</html>

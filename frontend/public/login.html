@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>AI Persona Generator</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
+    rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#13a4ec",
+            "background-light": "#f6f7f8",
+            "background-dark": "#101c22",
+          },
+          fontFamily: {
+            display: ["Space Grotesk", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+            lg: "1rem",
+            xl: "1.5rem",
+            full: "9999px",
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body {
+      font-family: "Space Grotesk", sans-serif;
+    }
+  </style>
+</head>
+
+<body class="font-display text-slate-800 dark:text-slate-200">
+  <div class="flex flex-col min-h-screen bg-background-light dark:bg-background-dark">
+    <header class="absolute top-0 left-0 w-full z-10">
+      <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-20">
+          <div class="flex items-center gap-3">
+            <svg class="text-primary" fill="none" height="24" viewBox="0 0 24 24" width="24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 4C14.76 4 17.1 5.44 18.43 7.57L16.22 9.78C15.26 8.82 13.74 8.25 12 8.25C10.26 8.25 8.74 8.82 7.78 9.78L5.57 7.57C6.9 5.44 9.24 4 12 4ZM12 20C9.24 20 6.9 18.56 5.57 16.43L7.78 14.22C8.74 15.18 10.26 15.75 12 15.75C13.74 15.75 15.26 15.18 16.22 14.22L18.43 16.43C17.1 18.56 14.76 20 12 20Z"
+                fill="currentColor"></path>
+            </svg>
+            <h1 class="text-xl font-bold text-slate-900 dark:text-white">AI Persona</h1>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main class="flex-grow flex items-center justify-center">
+      <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div class="max-w-md mx-auto">
+          <div
+            class="bg-background-light dark:bg-slate-800/50 rounded-xl shadow-2xl shadow-primary/10 dark:shadow-primary/5 p-8 md:p-12 transition-all duration-500 transform scale-100 animate-fade-in-up">
+            <div class="mb-8">
+              <div
+                class="w-24 h-24 mx-auto rounded-full bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 p-1 shadow-lg transform transition-transform duration-500 hover:scale-110">
+                <div class="w-full h-full bg-white dark:bg-slate-900 rounded-full flex items-center justify-center">
+                  <svg class="w-12 h-12 text-slate-800 dark:text-white" fill="none" stroke="currentColor"
+                    stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+                    <rect height="20" rx="5" ry="5" width="20" x="2" y="2"></rect>
+                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"></line>
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <h2 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">
+              Welcome to AI Persona
+            </h2>
+            <p class="text-lg text-slate-600 dark:text-slate-400 mb-8">
+              Log in to create a chatbot that mimics your personality.
+            </p>
+            <a href="/auth/facebook"
+              class="w-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 text-white font-bold text-lg py-4 px-10 rounded-lg hover:shadow-xl hover:scale-105 transition-all duration-300 transform shadow-lg shadow-blue-500/30 flex items-center justify-center gap-3">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M12 2.163C6.477 2.163 2 6.477 2 12s4.477 9.837 9.837 9.837V15H9.682v-2.822h2.298v-2.028c0-2.28 1.4-3.528 3.535-3.528 1.056 0 1.954.079 2.221.114v2.548l-1.512.001c-1.18 0-1.411.56-1.411 1.383v1.812h2.829l-.488 2.822h-2.341V21.837C17.523 21.837 22 17.523 22 12s-4.477-9.837-9.837-9.837z">
+                </path>
+              </svg>
+              Log In with Facebook
+            </a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <style>
+    @keyframes fade-in-up {
+      0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .animate-fade-in-up {
+      animation: fade-in-up 0.6s ease-out forwards;
+    }
+  </style>
+
+</body>
+
+</html>

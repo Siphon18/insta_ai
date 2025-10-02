@@ -1,0 +1,6 @@
+beautifulsoup4==4.13.3
+cloudscraper==1.2.71
+pandas==2.2.3
+pytz==2025.1
+seleniumbase==4.38.0
+requests==2.32.3

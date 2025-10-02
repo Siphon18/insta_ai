@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>AI Persona</title>
+  <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon" />
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;display=swap"
+    rel="stylesheet" />
+  <style>
+    html {
+      scroll-behavior: smooth;
+    }
+
+    @keyframes hero-fade-in {
+      0% {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-hero-fade-in {
+      animation: hero-fade-in 1s ease-out forwards;
+      opacity: 0;
+      /* Ensures it's hidden before animation starts */
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#13a4ec",
+            "background-light": "#f6f7f8",
+            "background-dark": "#101c22",
+          },
+          fontFamily: {
+            "display": ["Space Grotesk"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.5rem",
+            "lg": "1rem",
+            "xl": "1.5rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+  <script src="https://unpkg.com/typed.js@2.1.0/dist/typed.umd.js"></script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+  <div class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden">
+    <div class="layout-container flex h-full grow flex-col">
+      <header
+        class="sticky top-0 z-50 flex items-center justify-between whitespace-nowrap border-b border-gray-200/50 dark:border-gray-700/50 px-10 py-4 backdrop-blur-md bg-background-light/80 dark:bg-background-dark/80 transition-colors duration-300">
+        <div class="flex items-center gap-3 text-gray-900 dark:text-white">
+          <div class="h-8 w-8 text-primary">
+            <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M13.8261 17.4264C16.7203 18.1174 20.2244 18.5217 24 18.5217C27.7756 18.5217 31.2797 18.1174 34.1739 17.4264C36.9144 16.7722 39.9967 15.2331 41.3563 14.1648L24.8486 40.6391C24.4571 41.267 23.5429 41.267 23.1514 40.6391L6.64374 14.1648C8.00331 15.2331 11.0856 16.7722 13.8261 17.4264Z"
+                fill="currentColor"></path>
+              <path clip-rule="evenodd"
+                d="M39.998 12.236C39.9944 12.2537 39.9875 12.2845 39.9748 12.3294C39.9436 12.4399 39.8949 12.5741 39.8346 12.7175C39.8168 12.7597 39.7989 12.8007 39.7813 12.8398C38.5103 13.7113 35.9788 14.9393 33.7095 15.4811C30.9875 16.131 27.6413 16.5217 24 16.5217C20.3587 16.5217 17.0125 16.131 14.2905 15.4811C12.0012 14.9346 9.44505 13.6897 8.18538 12.8168C8.17384 12.7925 8.16216 12.767 8.15052 12.7408C8.09919 12.6249 8.05721 12.5114 8.02977 12.411C8.00356 12.3152 8.00039 12.2667 8.00004 12.2612C8.00004 12.261 8 12.2607 8.00004 12.2612C8.00004 12.2359 8.0104 11.9233 8.68485 11.3686C9.34546 10.8254 10.4222 10.2469 11.9291 9.72276C14.9242 8.68098 19.1919 8 24 8C28.8081 8 33.0758 8.68098 36.0709 9.72276C37.5778 10.2469 38.6545 10.8254 39.3151 11.3686C39.9006 11.8501 39.9857 12.1489 39.998 12.236ZM4.95178 15.2312L21.4543 41.6973C22.6288 43.5809 25.3712 43.5809 26.5457 41.6973L43.0534 15.223C43.0709 15.1948 43.0878 15.1662 43.104 15.1371C43.1276 15.094 43.2062 14.9455 43.244 14.8701C43.319 14.7208 43.4196 14.511 43.5217 14.2683C43.6901 13.8679 44 13.0689 44 12.2609C44 10.5573 43.003 9.22254 41.8558 8.2791C40.6947 7.32427 39.1354 6.55361 37.385 5.94477C33.8654 4.72057 29.133 4 24 4C18.867 4 14.1346 4.72057 10.615 5.94478C8.86463 6.55361 7.30529 7.32428 6.14419 8.27911C4.99695 9.22255 3.99999 10.5573 3.99999 12.2609C3.99999 13.1275 4.29264 13.9078 4.49321 14.3607C4.60375 14.6102 4.71348 14.8196 4.79687 14.9689C4.83898 15.0444 4.87547 15.1065 4.9035 15.1529C4.91754 15.1762 4.92954 15.1957 4.93916 15.2111L4.94662 15.223L4.95178 15.2312ZM35.9868 18.996L24 38.22L12.0131 18.996C12.4661 19.1391 12.9179 19.2658 13.3617 19.3718C16.4281 20.1039 20.0901 20.5217 24 20.5217C27.9099 20.5217 31.5719 20.1039 34.6383 19.3718C35.082 19.2658 35.5339 19.1391 35.9868 18.996Z"
+                fill="currentColor" fill-rule="evenodd"></path>
+            </svg>
+          </div>
+          <h2 class="text-xl font-bold">AI Persona</h2>
+        </div>
+        <div class="flex flex-1 items-center justify-end gap-6">
+          <nav class="hidden items-center gap-8 md:flex">
+            <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors"
+              href="#how-it-works">How it works</a>
+            <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors"
+              href="#pricing">Pricing</a>
+            <a class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors"
+              href="#contact">Contact</a>
+          </nav>
+          <a href="add-username.html"
+            class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-primary text-white text-sm font-bold shadow-sm hover:bg-primary/90 transition-all duration-300 ease-in-out transform hover:scale-105">
+            <span class="truncate">Get started</span>
+          </a>
+        </div>
+      </header>
+      <main class="flex-1 px-4 sm:px-10 lg:px-20 xl:px-40 py-10">
+        <div class="layout-content-container mx-auto flex max-w-5xl flex-col gap-16">
+          <div
+            class="relative flex min-h-[480px] flex-col items-center justify-center gap-6 rounded-xl bg-cover bg-center p-8 text-center animate-hero-fade-in"
+            style='background-image: linear-gradient(rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 100%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuAEBDXAMjvVczyHq4TYCOnTTAMa_kO5_iGp2DLBzGn-SlXq3RhvidT-PcCFT0FKxmc2u5od8Q8dKqEemRXPQ7AnvmfdRpQadsUGqbAK_GREavTYiysZSxYm2ZdfP3F-Iyh47Jmv16w-UdsVDy2tOswXSwpjZnqpE2duzf2VDBDua63IMO8SMfH6bKrWVzX7b5BPIlF96u8yJa4dJUg-BN5xSbOkvgra1yUpPeQMHv2P0TQ37hYw7C25ClraKulQeC7mJDGG43VvY-c");'>
+            <div class="flex flex-col gap-4">
+              <h1 id="hero-title" class="text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">Chat with
+                your AI Persona
+              </h1>
+              <p class="mx-auto max-w-2xl text-base text-gray-200 sm:text-lg">AI Persona now mimics your personality
+                based on your Instagram profile. Experience conversations that feel authentically you.</p>
+            </div>
+            <a href="add-username.html"
+              class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-primary text-white text-base font-bold shadow-lg hover:bg-primary/90 transition-all duration-300 ease-in-out transform hover:scale-105">
+              <span class="truncate">Get started</span>
+            </a>
+          </div>
+
+          <section id="how-it-works" class="grid grid-cols-1 gap-16 lg:grid-cols-3 reveal">
+            <div class="lg:col-span-2">
+              <div class="flex flex-col gap-10">
+                <div class="flex flex-col gap-2 text-center">
+                  <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">How it works
+                  </h2>
+                  <p class="mx-auto max-w-3xl text-base text-gray-600 dark:text-gray-400 sm:text-lg">Our AI Persona
+                    technology analyzes your Instagram profile to create a personalized AI that mirrors your unique
+                    communication style.</p>
+                </div>
+                <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                  <div class="flex flex-col gap-4">
+                    <div class="w-full aspect-video rounded-lg bg-cover bg-center"
+                      style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB1f-0Iy_ZflvvySlq45jWHUs2DduwFStv8HEVi5HfRP7ol5bAoFhRtNNNoqWnjcB99r-n4SI53IOEA0NN24wD0ncOuhRwRXgV24Z-M9yeiQXx2qx5HlLAULBqaUkTijc_RZQ9gKLiwQToc0TRHg3Bc3P7V716IUSdqCoKPWfM2g0ecWi-6fftMthiuXP0KhWrebg9Z5zJVSX2hsOZ2gj-DGDXHX33RkQuXjt4zO9WeAJSRbsRFmtJWPT-TCKWML3CjzcSwmbGDT-0");'>
+                    </div>
+                    <div>
+                      <h3 class="text-lg font-bold text-gray-900 dark:text-white">Data Analysis</h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400">We analyze your Instagram activity to
+                        understand your communication patterns.</p>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-4">
+                    <div class="w-full aspect-video rounded-lg bg-cover bg-center"
+                      style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDaUHk-GDFCVlRKnmMyYoG0OLhmTgP_0Ln2m5PSulr53IVScaSO0Xpy3M4PdQMKzZ7vsIUYUfVk7Srq0qgiiTDhDS8RFpu0RHzhpbXvq4AQSAbhiQOEp2rxk-XjzTOSsMgaTwhYgJkXO3ZM0dEl4MK2G-Zfk1QbU4MdUx3Gc9LPV2uTQMA0m6bz5OgpOQtWhAfvy5NSrGa3SQ5-jrwroxNH1bo2mwcclTNbJNsk7DlJjkDdbH78vLW8Ph4dd8qco80dObu7lZzt9ng");'>
+                    </div>
+                    <div>
+                      <h3 class="text-lg font-bold text-gray-900 dark:text-white">Persona Creation</h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400">Our advanced algorithms create a digital twin
+                        that reflects your unique personality.</p>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-4">
+                    <div class="w-full aspect-video rounded-lg bg-cover bg-center"
+                      style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC5_G3yR3QIU_0xHKmyaIHZa-5qCCw6nH8Z-B-5kK-Yg-NQMX_Wj4sHSjP0pmFlpOqX2yGGhEDcjfVXIbLhWez6aS46mbDJ_utk7qxSx4uaVapsaekorCFTNGh-6tIx8W_kkGtzMLsVWzazDhbzOTERGvVEsqNiAWmUesO0EukOKU_Z-Ep8jGMryKSttc6Cvw0vJWa361LUx8U8vyIYSVtb5Ox0Hu1pSufABJMbjaM83RuuryZMzWoMuci-HjkIkZcJtCywOScg9mA");'>
+                    </div>
+                    <div>
+                      <h3 class="text-lg font-bold text-gray-900 dark:text-white">Personalized Interaction</h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400">Engage in conversations with your AI Persona,
+                        experiencing interactions that feel authentically you.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="lg:col-span-1">
+              <div
+                class="sticky top-10 flex flex-col gap-6 rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-6 shadow-xl dark:bg-gray-800/50">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Chat with your AI Persona</h3>
+                <div
+                  class="flex flex-col gap-4 h-96 overflow-y-auto p-4 border rounded-lg dark:border-gray-700 bg-white dark:bg-gray-800">
+                  <div class="flex items-start gap-3">
+                    <div class="h-8 w-8 flex-shrink-0 rounded-full bg-primary flex items-center justify-center">
+                      <svg fill="none" height="16" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm-1-13h2v6h-2v-6zm0 8h2v2h-2v-2z"
+                          fill="white"></path>
+                      </svg>
+                    </div>
+                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-3 text-sm">Hello! How can I help you today?
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-3 ml-auto flex-row-reverse">
+                    <div
+                      class="h-8 w-8 flex-shrink-0 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-xs font-bold">
+                      YOU</div>
+                    <div class="rounded-lg bg-primary text-white p-3 text-sm">Tell me about yourself.</div>
+                  </div>
+                  <div class="flex items-start gap-3">
+                    <div class="h-8 w-8 flex-shrink-0 rounded-full bg-primary flex items-center justify-center">
+                      <svg fill="none" height="16" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm-1-13h2v6h-2v-6zm0 8h2v2h-2v-2z"
+                          fill="white"></path>
+                      </svg>
+                    </div>
+                    <div class="rounded-lg bg-gray-100 dark:bg-gray-700 p-3 text-sm">I am an AI Persona, designed to
+                      mimic your personality based on your Instagram profile. I can engage in conversations that feel
+                      authentically you.</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input type="text"
+                    class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="Type your message..." />
+                  <button
+                    class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white shadow-sm hover:bg-primary/90">
+                    <svg fill="currentColor" height="20" viewBox="0 0 256 256" width="20"
+                      xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M232,128A104,104,0,1,1,24,128,104,104,0,0,1,232,128Zm-55.32-22.63-78.4-32.81a8,8,0,0,0-8,1.14,8,8,0,0,0-3.28,5.41l-6,57.54a7.94,7.94,0,0,0,4.32,6.63l58.4,24.37a7.87,7.87,0,0,0,8.72-2.41,7.7,7.7,0,0,0,1.56-8.14l-49.76-56.65Z">
+                      </path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="pricing" class="flex flex-col gap-10 reveal">
+            <div class="flex flex-col gap-2 text-center">
+              <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Pricing</h2>
+              <p class="mx-auto max-w-3xl text-base text-gray-600 dark:text-gray-400 sm:text-lg">Choose a plan that fits
+                your needs and start experiencing personalized AI interactions today.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <div
+                class="flex flex-col gap-4 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white/20 dark:bg-gray-800/20 p-6 transition-all duration-300 hover:shadow-lg hover:border-primary/50 dark:hover:border-primary/50">
+                <div class="text-primary"><svg fill="currentColor" height="32" viewBox="0 0 256 256" width="32"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48Zm0,16V88H32V64Zm0,128H32V104H224v88Zm-16-24a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h32A8,8,0,0,1,208,168Zm-64,0a8,8,0,0,1-8,8H120a8,8,0,0,1,0-16h16A8,8,0,0,1,144,168Z">
+                    </path>
+                  </svg></div>
+                <div class="flex flex-col gap-1">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">Free</h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">Free access to basic features and limited
+                    interactions.</p>
+                </div>
+              </div>
+              <div
+                class="flex flex-col gap-4 rounded-lg border border-primary/50 bg-white/30 dark:bg-gray-800/30 p-6 ring-2 ring-primary/50 shadow-xl transition-all duration-300">
+                <div class="text-primary"><svg fill="currentColor" height="32" viewBox="0 0 256 256" width="32"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M208,40H48A16,16,0,0,0,32,56v58.78c0,89.61,75.82,119.34,91,124.39a15.53,15.53,0,0,0,10,0c15.2-5.05,91-34.78,91-124.39V56A16,16,0,0,0,208,40Zm0,74.79c0,78.42-66.35,104.62-80,109.18-13.53-4.51-80-30.69-80-109.18V56H208ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.68l50.34-50.34a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z">
+                    </path>
+                  </svg></div>
+                <div class="flex flex-col gap-1">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">Basic</h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">Enhanced features and more interactions for
+                    personal use.</p>
+                </div>
+              </div>
+              <div
+                class="flex flex-col gap-4 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white/20 dark:bg-gray-800/20 p-6 transition-all duration-300 hover:shadow-lg hover:border-primary/50 dark:hover:border-primary/50">
+                <div class="text-primary"><svg fill="currentColor" height="32" viewBox="0 0 256 256" width="32"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM84,116a12,12,0,1,0,12,12A12,12,0,0,0,84,116Zm88,0a12,12,0,1,0,12,12A12,12,0,0,0,172,116Zm60,12A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-16,0A88,88,0,1,0,51.81,172.06a8,8,0,0,1,.66,6.54L40,216,77.4,203.53a7.85,7.85,0,0,1,2.53-.42,8,8,0,0,1,4,1.08A88,88,0,0,0,216,128Z">
+                    </path>
+                  </svg></div>
+                <div class="flex flex-col gap-1">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">Premium</h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">Unlimited access and premium support for power
+                    users.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section id="call-to-action" class="rounded-xl bg-gray-100 dark:bg-gray-800/50 py-16 px-8 text-center reveal">
+            <div class="flex flex-col items-center gap-4">
+              <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Ready to meet your
+                AI Persona?</h2>
+              <p class="max-w-2xl text-base text-gray-600 dark:text-gray-400">Sign up now and start experiencing the
+                future of personalized AI interactions.</p>
+              <div class="mt-4 flex justify-center">
+                <a href="add-username.html"
+                  class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-primary text-white text-sm font-bold shadow-sm hover:bg-primary/90 transition-all duration-300 ease-in-out transform hover:scale-105">
+                  <span class="truncate">Get started</span>
+                </a>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+      <footer class="border-t border-gray-200/50 dark:border-gray-700/50">
+        <div class="mx-auto max-w-5xl px-5 py-10">
+          <div class="flex flex-col items-center justify-between gap-6 sm:flex-row">
+            <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+              <a class="text-sm text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                href="#">Terms of Service</a>
+              <a class="text-sm text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                href="#">Privacy Policy</a>
+              <a class="text-sm text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                href="#">Contact Us</a>
+            </div>
+            <div class="flex justify-center gap-4">
+              <a class="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                href="#">
+                <svg fill="currentColor" height="24" viewBox="0 0 256 256" width="24"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160ZM176,24H80A56.06,56.06,0,0,0,24,80v96a56.06,56.06,0,0,0,56,56h96a56.06,56.06,0,0,0,56-56V80A56.06,56.06,0,0,0,176,24Zm40,152a40,40,0,0,1-40,40H80a40,40,0,0,1-40-40V80A40,40,0,0,1,80,40h96a40,40,0,0,1,40,40ZM192,76a12,12,0,1,1-12-12A12,12,0,0,1,192,76Z">
+                  </path>
+                </svg>
+              </a>
+              <a class="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                href="#">
+                <svg fill="currentColor" height="24" viewBox="0 0 256 256" width="24"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm8,191.63V152h24a8,8,0,0,0,0-16H136V112a16,16,0,0,1,16-16h16a8,8,0,0,0,0-16H152a32,32,0,0,0-32,32v24H96a8,8,0,0,0,0,16h24v63.63a88,88,0,1,1,16,0Z">
+                  </path>
+                </svg>
+              </a>
+            </div>
+          </div>
+          <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">© 2023 AI Persona. All rights reserved.
+          </p>
+        </div>
+      </footer>
+    </div>
+  </div>
+  <script src="https://unpkg.com/scrollreveal"></script>
+  <script>
+    ScrollReveal({ reset: false, distance: '60px', duration: 1000, easing: 'cubic-bezier(0.5, 0, 0, 1)' });
+
+    // Target elements with a class for animation
+    ScrollReveal().reveal('.reveal', { delay: 200, origin: 'bottom' });
+    ScrollReveal().reveal('.reveal-left', { delay: 200, origin: 'left' });
+    ScrollReveal().reveal('.reveal-right', { delay: 200, origin: 'right' });
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+      var typed = new Typed('#hero-title', {
+        strings: ["Chat with your AI Persona"],
+        typeSpeed: 50,
+        showCursor: false
+      });
+    });
+  </script>
+
+</body>
+
+</html>

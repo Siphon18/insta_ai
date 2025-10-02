@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>AI Persona Chat</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    }
+
+    .instagram-gradient {
+      background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    @keyframes message-fade-in {
+      0% {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .chat-message {
+      animation: message-fade-in 0.5s ease-out forwards;
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-4px);
+      }
+    }
+
+    .typing-dot {
+      animation: pulse-dot 0.6s infinite;
+    }
+
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    .insta-carousel {
+      height: 320px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.02));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .insta-track {
+      display: flex;
+      height: 100%;
+      transition: transform 520ms cubic-bezier(.2, .9, .3, 1);
+      will-change: transform;
+    }
+
+    .insta-slide {
+      min-width: 100%;
+      height: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .insta-slide img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 8px;
+      box-shadow: 0 6px 18px rgba(10, 10, 20, 0.35);
+      transition: transform 400ms ease, filter 400ms ease;
+    }
+
+    .insta-slide.active img {
+      transform: scale(1.03);
+      filter: saturate(1.05) contrast(1.02);
+    }
+
+    .insta-empty {
+      padding: 16px;
+    }
+
+    .persona-info {
+      position: sticky;
+      top: 1rem;
+      z-index: 2;
+      background: transparent;
+      padding-bottom: 0.75rem;
+    }
+
+    .persona-card {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .persona-card .avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 6px 18px rgba(10, 10, 20, 0.12);
+    }
+
+    .persona-card .meta h4 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .persona-card .meta p {
+      margin: 0;
+      font-size: 13px;
+      color: rgba(100, 110, 120, 1);
+    }
+
+    .persona-bio {
+      margin-top: 8px;
+      border-radius: 8px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 13px;
+      color: var(--tw-text-opacity, #6b7280);
+    }
+
+    #insta-status {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-left: 8px;
+    }
+
+    .voice-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #64748b;
+      padding: 2px 8px;
+      background: rgba(100, 116, 139, 0.1);
+      border-radius: 12px;
+      margin-top: 4px;
+    }
+
+    .voice-indicator .material-symbols-outlined {
+      font-size: 14px;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#E1306C",
+            "background-light": "#f6f7f8",
+            "background-dark": "#101c22",
+          },
+          fontFamily: {
+            display: ["Space Grotesk"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+            lg: "1rem",
+            xl: "1.5rem",
+            full: "9999px",
+          },
+        },
+      },
+    };
+  </script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-800 dark:text-slate-200">
+  <div class="flex h-screen flex-col">
+    <header class="border-b border-slate-200/80 dark:border-slate-800/80 px-6 py-3">
+      <div class="flex items-center justify-between">
+        <nav class="hidden md:flex items-center gap-6">
+          <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors"
+            href="login.html">Home</a>
+          <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors"
+            href="index.html">About</a>
+          <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors"
+            href="index.html">Contact</a>
+        </nav>
+
+        <div class="flex items-center gap-4">
+          <button id="new-chat-btn" type="button"
+            class="bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] hover:opacity-90 text-white font-bold py-2 px-4 rounded-lg text-sm transition-opacity">
+            New Chat
+          </button>
+          <div id="header-user-pic" class="h-10 w-10 rounded-full bg-cover bg-center"></div>
+        </div>
+      </div>
+    </header>
+    <main class="flex flex-1 flex-col xl:flex-row overflow-hidden">
+      <div class="flex flex-1 flex-col p-4 md:p-6">
+        <div id="chat-container" class="flex-1 space-y-8 overflow-y-auto pr-4">
+          <div class="flex flex-col gap-4">
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Chat with an <span
+                class="instagram-gradient">Instagram</span> Persona</h2>
+            <p class="text-slate-600 dark:text-slate-400">
+              Start a conversation with an AI that mimics a personality from an Instagram profile.
+            </p>
+          </div>
+        </div>
+        <div class="mt-auto pt-4">
+          <form id="chat-form" class="relative">
+            <div id="user-input-pic"
+              class="h-10 w-10 absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-cover bg-center"></div>
+            <input id="message-input"
+              class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark py-3 pl-16 pr-28 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 focus:bg-white dark:focus:bg-slate-900"
+              placeholder="Type your message..." type="text" />
+            <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              <button id="mic-btn" type="button"
+                class="bg-slate-200 dark:bg-slate-700 text-primary rounded-full hover:bg-primary hover:text-white transition-colors flex items-center justify-center h-9 w-9"
+                title="Voice Chat" aria-label="Start voice chat">
+                <span class="material-symbols-outlined text-[20px] leading-none align-middle">mic</span>
+              </button>
+              <button type="submit"
+                class="bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] hover:opacity-90 text-white font-bold py-2 px-4 rounded-lg text-sm transition-opacity">
+                Send
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <aside
+        class="hidden xl:block w-96 border-l border-slate-200/80 dark:border-slate-800/80 p-6 flex-col space-y-6 overflow-y-auto">
+
+        <div id="persona-info" class="persona-info">
+          <div class="text-sm text-slate-500 italic">Loading persona…</div>
+        </div>
+
+        <div id="instagram-widget" class="flex flex-col space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 id="insta-title" class="text-lg font-semibold">Photos</h3>
+            <span id="insta-status" style="display:none;"></span>
+            <div class="flex items-center gap-2">
+              <button id="insta-prev" aria-label="Previous"
+                class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">‹</button>
+              <button id="insta-next" aria-label="Next"
+                class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">›</button>
+            </div>
+          </div>
+          <div id="insta-carousel" class="insta-carousel relative overflow-hidden rounded-md">
+            <div class="insta-track"></div>
+            <div class="insta-empty text-sm text-slate-400">This feature is currently unavailable.</div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const chatContainer = document.getElementById('chat-container');
+      const chatForm = document.getElementById('chat-form');
+      const messageInput = document.getElementById('message-input');
+      const newChatBtn = document.getElementById('new-chat-btn');
+      const micBtn = document.getElementById('mic-btn');
+
+      let isSubmitting = false;
+      let currentSlideIndex = 0;
+      let totalSlides = 0;
+
+      const personaData = (() => {
+        try { return JSON.parse(localStorage.getItem('personaData')); } catch (e) { return null; }
+      })();
+      const personaName = personaData?.name || 'AI Persona';
+      const voiceInfo = personaData?.voiceId ? `${personaData.voiceId}${personaData.voiceDescription ? ' - ' + personaData.voiceDescription : ''}` : null;
+      let aiPersonaPicUrl = localStorage.getItem('aiPersonaPic') || null;
+      const userPicUrl = 'https://pics.craiyon.com/2023-07-28/d46dc75736f34559b1f7d975877c3852.webp';
+
+      document.getElementById('header-user-pic').style.backgroundImage = `url("${aiPersonaPicUrl || userPicUrl}")`;
+      document.getElementById('user-input-pic').style.backgroundImage = `url("${userPicUrl}")`;
+
+      if (micBtn) {
+        micBtn.addEventListener('click', () => {
+          window.location.href = '/voice-chat.html';
+        });
+      }
+
+      // Instagram Posts Fetcher
+      const INSTAGRAM_POSTS_ENDPOINT = '/instagram-posts';
+      const DEFAULT_IMAGE_LIMIT = 12;
+
+      function setInstaStatus(msg) {
+        const el = document.getElementById('insta-status');
+        if (!el) return;
+        if (!msg) { el.style.display = 'none'; el.textContent = ''; }
+        else { el.style.display = 'inline'; el.textContent = msg; }
+      }
+
+      async function fetchInstagramPosts(username, limit = DEFAULT_IMAGE_LIMIT) {
+        if (!username) {
+          console.warn('[fetchInstagramPosts] no username provided');
+          return [];
+        }
+
+        try {
+          setInstaStatus('Loading posts...');
+
+          const resp = await fetch(`${INSTAGRAM_POSTS_ENDPOINT}?username=${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`);
+
+          if (!resp.ok) {
+            const errorData = await resp.json().catch(() => ({}));
+            console.warn('[fetchInstagramPosts] server returned', resp.status, errorData);
+            setInstaStatus(errorData.error || 'Failed to load');
+            return [];
+          }
+
+          const json = await resp.json();
+          const images = Array.isArray(json.images) ? json.images : [];
+
+          console.log(`[fetchInstagramPosts] Got ${images.length} images for @${username}`);
+
+          setInstaStatus('');
+          return images;
+        } catch (err) {
+          console.warn('[fetchInstagramPosts] error', err);
+          setInstaStatus('Error loading posts');
+          return [];
+        }
+      }
+
+      function proxiedImageUrl(url) {
+        if (!url) return url;
+        if (url.startsWith('/api/image-proxy') || url.startsWith('/image-proxy')) return url;
+        return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+      }
+
+      function renderCarousel(images) {
+        const track = document.querySelector('#insta-carousel .insta-track');
+        const empty = document.querySelector('#insta-carousel .insta-empty');
+        if (!track) {
+          console.warn('[renderCarousel] no .insta-track found');
+          return;
+        }
+
+        track.innerHTML = '';
+
+        if (!images || !images.length) {
+          if (empty) empty.style.display = 'block';
+          totalSlides = 0;
+          currentSlideIndex = 0;
+          return;
+        } else {
+          if (empty) empty.style.display = 'none';
+        }
+
+        totalSlides = images.length;
+        currentSlideIndex = 0;
+
+        images.forEach((src, i) => {
+          const slide = document.createElement('div');
+          slide.className = 'insta-slide';
+          slide.dataset.index = i;
+          const img = document.createElement('img');
+          img.src = proxiedImageUrl(src);
+          img.alt = `Image ${i + 1}`;
+          img.loading = 'lazy';
+          slide.appendChild(img);
+          track.appendChild(slide);
+        });
+
+        updateCarouselPosition();
+      }
+
+      function updateCarouselPosition() {
+        const track = document.querySelector('#insta-carousel .insta-track');
+        if (!track) return;
+
+        const slides = track.querySelectorAll('.insta-slide');
+        slides.forEach((slide, i) => {
+          if (i === currentSlideIndex) {
+            slide.classList.add('active');
+          } else {
+            slide.classList.remove('active');
+          }
+        });
+
+        const offset = -currentSlideIndex * 100;
+        track.style.transform = `translateX(${offset}%)`;
+      }
+
+      document.getElementById('insta-prev')?.addEventListener('click', () => {
+        if (totalSlides === 0) return;
+        currentSlideIndex = (currentSlideIndex - 1 + totalSlides) % totalSlides;
+        updateCarouselPosition();
+      });
+
+      document.getElementById('insta-next')?.addEventListener('click', () => {
+        if (totalSlides === 0) return;
+        currentSlideIndex = (currentSlideIndex + 1) % totalSlides;
+        updateCarouselPosition();
+      });
+
+      function addTypingIndicator() {
+        if (!chatContainer) return;
+        if (document.getElementById('typing-indicator-dyn')) return;
+        const typingIndicatorDiv = document.createElement('div');
+        typingIndicatorDiv.id = 'typing-indicator-dyn';
+        typingIndicatorDiv.className = 'flex items-start gap-4 chat-message';
+        const profilePicDiv = document.createElement('div');
+        profilePicDiv.className = 'h-10 w-10 shrink-0 rounded-full bg-cover bg-center';
+        profilePicDiv.style.backgroundImage = `url("${aiPersonaPicUrl || userPicUrl}")`;
+        const messageContentDiv = document.createElement('div');
+        messageContentDiv.className = 'flex flex-col gap-1';
+        const senderName = document.createElement('p');
+        senderName.className = 'text-sm font-semibold text-slate-700 dark:text-slate-300';
+        senderName.textContent = personaName;
+        const messageBubble = document.createElement('div');
+        messageBubble.className = 'rounded-lg p-3 max-w-md bg-slate-200 dark:bg-slate-800';
+        const typingDots = document.createElement('div');
+        typingDots.className = 'flex items-center space-x-1';
+        for (let i = 0; i < 3; i++) {
+          const dot = document.createElement('span');
+          dot.className = 'typing-dot w-2 h-2 bg-gray-500 rounded-full';
+          dot.style.animationDelay = `${i * 0.12}s`;
+          typingDots.appendChild(dot);
+        }
+        messageBubble.appendChild(typingDots);
+        messageContentDiv.appendChild(senderName);
+        messageContentDiv.appendChild(messageBubble);
+        typingIndicatorDiv.appendChild(profilePicDiv);
+        typingIndicatorDiv.appendChild(messageContentDiv);
+        chatContainer.appendChild(typingIndicatorDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+
+      function removeTypingIndicator() {
+        const el = document.getElementById('typing-indicator-dyn');
+        if (el) el.remove();
+      }
+
+      function addMessage(sender, text, isUser = false) {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('flex', 'items-start', 'gap-4', 'chat-message');
+        if (isUser) messageDiv.classList.add('flex-row-reverse', 'self-end');
+        const profilePicDiv = document.createElement('div');
+        profilePicDiv.className = 'h-10 w-10 shrink-0 rounded-full bg-cover bg-center';
+        profilePicDiv.style.backgroundImage = `url("${isUser ? userPicUrl : (aiPersonaPicUrl || userPicUrl)}")`;
+        const messageContentDiv = document.createElement('div');
+        messageContentDiv.className = 'flex flex-col gap-1';
+        const senderName = document.createElement('p');
+        senderName.className = 'text-sm font-semibold text-slate-700 dark:text-slate-300';
+        senderName.textContent = sender;
+        const messageBubble = document.createElement('div');
+        messageBubble.classList.add('rounded-lg', 'p-3', 'max-w-md');
+        if (isUser) { messageBubble.classList.add('bg-primary', 'text-white'); }
+        else { messageBubble.classList.add('bg-slate-200', 'dark:bg-slate-800'); }
+        const messageText = document.createElement('p');
+        if (isUser) {
+          messageText.className = 'text-white';
+        } else {
+          messageText.className = 'text-slate-800 dark:text-slate-200';
+        }
+        messageText.textContent = text;
+        messageBubble.appendChild(messageText);
+        messageContentDiv.appendChild(senderName);
+        messageContentDiv.appendChild(messageBubble);
+        messageDiv.appendChild(profilePicDiv);
+        messageDiv.appendChild(messageContentDiv);
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+
+      function createAIMessageBubble() {
+        if (!chatContainer) return null;
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'flex items-start gap-4 chat-message';
+        const profilePicDiv = document.createElement('div');
+        profilePicDiv.className = 'h-10 w-10 shrink-0 rounded-full bg-cover bg-center';
+        profilePicDiv.style.backgroundImage = `url("${aiPersonaPicUrl || userPicUrl}")`;
+        const messageContentDiv = document.createElement('div');
+        messageContentDiv.className = 'flex flex-col gap-1';
+        const senderName = document.createElement('p');
+        senderName.className = 'text-sm font-semibold text-slate-700 dark:text-slate-300';
+        senderName.textContent = personaName;
+
+        // Create a container for the name and the future audio button
+        const senderInfoDiv = document.createElement('div');
+        senderInfoDiv.className = 'flex items-center gap-2';
+        senderInfoDiv.appendChild(senderName);
+
+        const messageBubble = document.createElement('div');
+        messageBubble.className = 'rounded-lg p-3 max-w-md bg-slate-200 dark:bg-slate-800';
+        const messageText = document.createElement('p');
+        messageText.className = 'text-slate-800 dark:text-slate-200';
+        messageText.textContent = '';
+        messageBubble.appendChild(messageText);
+
+        messageContentDiv.appendChild(senderInfoDiv); // Append the new container
+        messageContentDiv.appendChild(messageBubble);
+        messageDiv.appendChild(profilePicDiv);
+        messageDiv.appendChild(messageContentDiv);
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // Return an object with references to the important elements
+        return {
+          textElement: messageText,
+          senderInfoContainer: senderInfoDiv
+        };
+      }
+
+      async function typeTextIntoElement(el, text, speed = 25) {
+        if (!el) return;
+        el.textContent = '';
+        for (let i = 0; i < text.length; i++) {
+          el.textContent += text[i];
+          chatContainer.scrollTop = chatContainer.scrollHeight;
+          await new Promise(res => setTimeout(res, speed));
+        }
+      }
+
+      async function fetchAndRenderReply(userMessage = "") {
+        if (isSubmitting) {
+          console.log('[fetchAndRenderReply] already submitting, ignoring');
+          return;
+        }
+
+        isSubmitting = true;
+        addTypingIndicator();
+
+        try {
+          const response = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: userMessage })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              console.warn('[fetchAndRenderReply] rate limited, waiting 2s and retrying once');
+              await new Promise(r => setTimeout(r, 2000));
+
+              const retryResponse = await fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: userMessage })
+              });
+
+              if (!retryResponse.ok) {
+                const retryData = await retryResponse.json();
+                throw new Error(retryData.error || 'Server error after retry');
+              }
+
+              const retryData = await retryResponse.json();
+              await renderResponse(retryData);
+              return;
+            }
+            throw new Error(data.error || 'Server error');
+          }
+
+          await renderResponse(data);
+
+        } catch (err) {
+          console.error('[fetchAndRenderReply] error', err);
+          removeTypingIndicator();
+          addMessage(personaName, 'Oops, something went wrong.', false);
+        } finally {
+          isSubmitting = false;
+        }
+      }
+
+      async function renderResponse(data) {
+        await new Promise(r => setTimeout(r, 700));
+        removeTypingIndicator();
+
+        const replyText = data.response || '(no response)';
+        const bubbleElements = createAIMessageBubble(); // Get the object with element references
+
+        if (!bubbleElements) return;
+
+        await typeTextIntoElement(bubbleElements.textElement, replyText);
+
+        if (data.audioUrl) {
+          const audio = new Audio(data.audioUrl);
+          audio.play().catch(err => console.error('Audio play failed:', err));
+
+          // Create the play button
+          const playButton = document.createElement('button');
+          playButton.className = 'text-slate-400 hover:text-primary dark:hover:text-primary transition-colors';
+          playButton.innerHTML = `<span class="material-symbols-outlined" style="font-size: 16px;">volume_up</span>`;
+          playButton.title = 'Play audio';
+          playButton.onclick = () => {
+            audio.currentTime = 0;
+            audio.play().catch(err => console.error('Audio replay failed:', err));
+          };
+
+          // Add the button to the sender info container
+          bubbleElements.senderInfoContainer.appendChild(playButton);
+        }
+      }
+
+      async function loadAndRenderHistory() {
+        try {
+          const response = await fetch('/get-chat-history');
+          if (!response.ok) throw new Error('Network response was not ok');
+          const history = await response.json();
+          if (history && history.length > 0) {
+            chatContainer.innerHTML = '';
+            let lastRenderedRole = null;
+            let lastRenderedText = null;
+            for (const message of history) {
+              const text = message.parts?.[0]?.text || '';
+              if (text === lastRenderedText && message.role === lastRenderedRole) {
+                continue;
+              }
+              if (message.role === 'user') {
+                addMessage('You', text, true);
+              } else if (message.role === 'model') {
+                addMessage(personaName, text, false);
+              }
+              lastRenderedRole = message.role;
+              lastRenderedText = text;
+            }
+          }
+          if (!Array.isArray(history)) return 0;
+          return history.length;
+        } catch (error) {
+          console.error("Failed to load chat history:", error);
+          addMessage('System', 'Could not load chat history.', false);
+          return 0;
+        }
+      }
+
+      async function tryInitialGreeting() {
+        if (!personaData || !personaData.username) {
+          addMessage(personaName, 'Please create a persona first.');
+          setTimeout(() => { window.location.href = '/add-username.html'; }, 1500);
+          return;
+        }
+        const messagesLoaded = await loadAndRenderHistory();
+        if (messagesLoaded === 0) {
+          await fetchAndRenderReply("");
+        }
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function populatePersonaSidebar() {
+        const aside = document.querySelector('aside');
+        const personaContainer = aside ? aside.querySelector('#persona-info') : null;
+
+        if (!personaData) {
+          if (personaContainer) {
+            personaContainer.innerHTML = `
+        <div class="sticky top-6 space-y-3">
+          <div class="persona-card">
+            <div class="avatar" style="background-image: url('${aiPersonaPicUrl || ''}');"></div>
+            <div class="meta">
+              <h4>AI Persona</h4>
+              <p class="text-xs">No persona set</p>
+            </div>
+          </div>
+          <div class="persona-bio">
+            <p class="text-sm">Create a persona to show profile info here.</p>
+            <button id="create-persona-cta" class="mt-2 px-3 py-1 rounded-md bg-sky-600 text-white text-sm">Create Persona</button>
+          </div>
+        </div>
+      `;
+            const cta = personaContainer.querySelector('#create-persona-cta');
+            if (cta) cta.addEventListener('click', () => { window.location.href = '/add-username.html'; });
+          }
+          return;
+        }
+
+        if (personaContainer && personaData) {
+          const avatarUrlSafe = aiPersonaPicUrl || '';
+          const voiceIndicatorHtml = voiceInfo ? `
+            <div class="voice-indicator">
+              <span class="material-symbols-outlined">record_voice_over</span>
+              <span>${escapeHtml(voiceInfo)}</span>
+            </div>
+          ` : '';
+
+          personaContainer.innerHTML = `
+      <div class="sticky top-6 space-y-4">
+        <div class="persona-card">
+          <div class="avatar" style="background-image: url('${avatarUrlSafe}');"></div>
+          <div class="meta">
+            <h4 class="text-slate-900 dark:text-white">${escapeHtml(personaData.name || '')}</h4>
+            <p class="text-sm text-slate-500">@${escapeHtml(personaData.username || '')}</p>
+            ${voiceIndicatorHtml}
+          </div>
+        </div>
+
+        <div class="persona-bio text-slate-600 dark:text-slate-400">
+          ${escapeHtml(personaData.bio || 'No bio provided.')}
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="edit-persona-btn" class="px-3 py-1 rounded-md border border-slate-200/50 dark:border-slate-700 text-sm">Edit</button>
+          <button id="load-insta-btn" class="px-3 py-1 rounded-md bg-primary text-white text-sm">Refresh Photos</button>
+        </div>
+      </div>
+    `;
+
+          const editBtn = personaContainer.querySelector('#edit-persona-btn');
+          if (editBtn) editBtn.addEventListener('click', () => { window.location.href = '/add-username.html'; });
+
+          const loadInstaBtn = personaContainer.querySelector('#load-insta-btn');
+          if (loadInstaBtn) {
+            loadInstaBtn.addEventListener('click', async () => {
+              try {
+                setInstaStatus('Loading...');
+                const username = personaData.username;
+                if (!username) {
+                  console.warn('[load-insta] no username in personaData');
+                  setInstaStatus('No username set');
+                  return;
+                }
+
+                const imgs = await fetchInstagramPosts(username, DEFAULT_IMAGE_LIMIT);
+                renderCarousel(imgs);
+                setInstaStatus('');
+              } catch (err) {
+                console.warn('[persona -> load insta] failed', err);
+                setInstaStatus('Error');
+              }
+            });
+          }
+        }
+      }
+
+      if (chatForm) {
+        chatForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const userMessage = messageInput.value.trim();
+          if (!userMessage || isSubmitting) return;
+
+          addMessage('You', userMessage, true);
+          messageInput.value = '';
+
+          await fetchAndRenderReply(userMessage);
+        });
+      }
+
+      if (newChatBtn) {
+        newChatBtn.addEventListener('click', async () => {
+          console.log('[new-chat] clicked');
+          newChatBtn.disabled = true;
+          newChatBtn.setAttribute('aria-busy', 'true');
+
+          try {
+            const resp = await fetch('/new-chat', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+            });
+
+            console.log('[new-chat] response status', resp.status);
+            if (resp.ok) {
+              localStorage.removeItem('personaData');
+              localStorage.removeItem('aiPersonaPic');
+              window.location.href = '/add-username.html';
+              return;
+            } else {
+              let body = null;
+              try { body = await resp.json(); } catch (e) { }
+              console.warn('[new-chat] server error', resp.status, body);
+              localStorage.removeItem('personaData');
+              localStorage.removeItem('aiPersonaPic');
+              window.location.href = '/add-username.html';
+              return;
+            }
+          } catch (err) {
+            console.error('[new-chat] network/fetch error', err);
+            localStorage.removeItem('personaData');
+            localStorage.removeItem('aiPersonaPic');
+            window.location.href = '/add-username.html';
+            return;
+          } finally {
+            newChatBtn.disabled = false;
+            newChatBtn.removeAttribute('aria-busy');
+          }
+        });
+      }
+
+      (async function autoLoadInstagram() {
+        try {
+          const personaData = (() => {
+            try { return JSON.parse(localStorage.getItem('personaData')); } catch (e) { return null; }
+          })();
+
+          if (!personaData || !personaData.username) {
+            console.log('[autoLoadInstagram] skipped - no persona data or username');
+            return;
+          }
+
+          await new Promise(r => setTimeout(r, 500));
+
+          const imgs = await fetchInstagramPosts(personaData.username, DEFAULT_IMAGE_LIMIT);
+          if (imgs && imgs.length) {
+            renderCarousel(imgs);
+          }
+        } catch (e) {
+          console.warn('[autoLoadInstagram] failed', e);
+        }
+      })();
+      
+      window.addEventListener('focus', () => {
+        console.log('Chat window focused, reloading history.');
+        loadAndRenderHistory();
+      });
+
+      populatePersonaSidebar();
+      tryInitialGreeting();
+    });
+  </script>
+</body>
+
+</html>

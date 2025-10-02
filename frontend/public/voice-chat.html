@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Persona Voice Chat</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        #visualizer-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 2;
+            background: radial-gradient(ellipse at 70% 80%, rgba(131, 58, 180, 0.2), transparent 50%),
+                radial-gradient(ellipse at 30% 90%, rgba(253, 29, 29, 0.15), transparent 60%),
+                radial-gradient(ellipse at 50% 100%, rgba(252, 176, 69, 0.1), transparent 70%);
+        }
+
+        .talk-btn-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(225, 48, 108, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 25px rgba(225, 48, 108, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(225, 48, 108, 0);
+            }
+        }
+
+        @keyframes fade-in-up {
+            0% {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in-up {
+            opacity: 0;
+            animation: fade-in-up 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-900 text-slate-200">
+    <canvas id="visualizer-canvas"></canvas>
+
+    <div class="overlay p-6 sm:p-8">
+        <header class="w-full flex justify-between items-center animate-fade-in-up" style="animation-delay: 0.2s;">
+            <div id="persona-header"
+                class="flex items-center gap-4 transition-transform duration-300 hover:scale-105 cursor-default"></div>
+            <a href="/Chat.html"
+                class="bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95">
+                <span class="material-symbols-outlined text-base">sms</span>
+                <span class="hidden sm:inline">Text Chat</span>
+            </a>
+        </header>
+
+        <div class="flex-grow flex items-center justify-center text-center px-4">
+            <h2 id="status-text"
+                class="text-3xl sm:text-4xl lg:text-5xl font-bold text-white drop-shadow-lg transition-all duration-300 ease-in-out animate-fade-in-up"
+                style="animation-delay: 0.4s;">
+                Click the button to speak
+            </h2>
+        </div>
+
+        <footer class="flex flex-col items-center gap-4 animate-fade-in-up" style="animation-delay: 0.6s;">
+            <button id="talk-btn"
+                class="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 rounded-full text-white font-bold text-lg shadow-2xl shadow-red-500/20 flex items-center justify-center talk-btn-pulse transition-all duration-300 ease-in-out hover:scale-105 active:scale-95 ring-4 ring-white/10">
+                <span id="talk-btn-icon" class="material-symbols-outlined text-4xl sm:text-5xl">mic</span>
+            </button>
+            <p class="text-xs sm:text-sm text-slate-400">Powered by Gemini & Murf.ai</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const talkBtn = document.getElementById('talk-btn');
+            const talkBtnIcon = document.getElementById('talk-btn-icon');
+            const statusText = document.getElementById('status-text');
+            const personaHeader = document.getElementById('persona-header');
+
+            let isRecording = false;
+            let isSendingTranscript = false;
+            let recognition = null;
+            let recognitionInitialized = false;
+            let lastClickTime = 0;
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            let audioContext = null;
+            let analyser = null;
+            let dataArray = null;
+            let sourceNode = null;
+            let currentMicStream = null;
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('visualizer-canvas'), antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.position.z = 5;
+            const geometry = new THREE.IcosahedronGeometry(2, 3);
+            const material = new THREE.MeshLambertMaterial({ color: 0x833ab4, emissive: 0xfd1d1d, wireframe: true });
+            const sphere = new THREE.Mesh(geometry, material);
+            scene.add(sphere);
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(5, 5, 5);
+            scene.add(light);
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+
+            const personaData = JSON.parse(localStorage.getItem('personaData'));
+            if (!personaData) {
+                updateStatusText('Persona not found. Redirecting...');
+                setTimeout(() => window.location.href = '/add-username.html', 2000);
+                return;
+            }
+            const aiPersonaPicUrl = localStorage.getItem('aiPersonaPic') || 'https://via.placeholder.com/150';
+            personaHeader.innerHTML = `
+                <div class="h-10 w-10 sm:h-12 sm:h-12 rounded-full bg-cover bg-center ring-2 ring-white/20" style="background-image: url('${aiPersonaPicUrl}')"></div>
+                <h1 class="text-xl sm:text-2xl font-bold text-white">${personaData.name || 'AI Persona'}</h1>
+            `;
+
+            function updateStatusText(newText) {
+                statusText.classList.add('opacity-0', 'scale-95', '-translate-y-2');
+                setTimeout(() => {
+                    statusText.textContent = newText;
+                    statusText.classList.remove('opacity-0', 'scale-95', '-translate-y-2');
+                }, 300);
+            }
+
+            function initRecognition() {
+                if (!SpeechRecognition) {
+                    updateStatusText("Speech recognition not supported.");
+                    talkBtn.disabled = true;
+                    return;
+                }
+                if (recognitionInitialized) return;
+
+                recognition = new SpeechRecognition();
+                recognition.lang = 'en-US';
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+
+                recognition.onresult = (event) => {
+                    try {
+                        if (isSendingTranscript) {
+                            console.log('[recognition] result ignored (already sending)');
+                            return;
+                        }
+                        const transcript = event.results[0][0].transcript.trim();
+                        if (transcript) {
+                            isSendingTranscript = true;
+                            console.log('[recognition] transcript:', transcript);
+                            updateStatusText(`"${transcript}"`);
+
+                            // Update recording state & UI immediately — otherwise onend may skip UI because isRecording already false
+                            isRecording = false;
+                            talkBtnIcon.textContent = 'mic';
+                            talkBtn.disabled = true;               // keep disabled while processing
+                            talkBtn.classList.remove('talk-btn-pulse');
+
+                            if (recognition) {
+                                try { recognition.stop(); } catch (e) { console.warn('[recognition.stop]', e); }
+                            }
+
+                            // send transcript to server (UI remains in "processing" state)
+                            sendTranscriptToServer(transcript).finally(() => {
+                                isSendingTranscript = false;
+                            });
+                        }
+                        else {
+                            stopListening();
+                        }
+                    } catch (err) {
+                        console.error('[recognition.onresult]', err);
+                        stopListening();
+                        isSendingTranscript = false;
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    console.error('[recognition] error', event.error);
+                    if (event.error === 'no-speech' || event.error === 'aborted') {
+                        updateStatusText("Click the button to speak");
+                    } else {
+                        updateStatusText("Sorry, I didn't catch that.");
+                    }
+                    stopListening();
+                    isSendingTranscript = false;
+                };
+
+                recognition.onend = () => {
+                    console.log('[recognition] ended, isRecording=', isRecording);
+                    if (isRecording) {
+                        isRecording = false;
+                        talkBtnIcon.textContent = 'mic';
+                        talkBtn.disabled = false;
+                        talkBtn.classList.add('talk-btn-pulse');
+                        if (!isSendingTranscript) {
+                            updateStatusText("Click the button to speak");
+                        }
+                    }
+                };
+
+                recognitionInitialized = true;
+                console.log('[recognition] initialized');
+            }
+
+            initRecognition();
+
+            async function startListening() {
+                if (!SpeechRecognition) return;
+                if (isRecording) return;
+                if (!recognitionInitialized) initRecognition();
+                try {
+                    isRecording = true;
+                    talkBtn.disabled = true;
+                    talkBtn.classList.remove('talk-btn-pulse');
+                    talkBtnIcon.textContent = 'stop';
+                    updateStatusText("Listening...");
+                    await setupMicrophoneVisualizer();
+                    recognition.start();
+                    console.log('[startListening] recognition.start() called');
+                } catch (err) {
+                    console.error('[startListening] start failed', err);
+                    isRecording = false;
+                    talkBtn.disabled = false;
+                    talkBtnIcon.textContent = 'mic';
+                    talkBtn.classList.add('talk-btn-pulse');
+                    updateStatusText("Click the button to speak");
+                }
+            }
+
+            function stopListening(isProcessing = false) {
+                try {
+                    if (recognition && typeof recognition.stop === 'function') {
+                        recognition.stop();
+                    } else if (recognition && typeof recognition.abort === 'function') {
+                        recognition.abort();
+                    }
+                } catch (err) {
+                    console.warn('[stopListening] recognition stop/abort error', err);
+                }
+
+                cleanupMicrophone();
+
+                isRecording = false;
+                talkBtnIcon.textContent = 'mic';
+                if (!isProcessing) {
+                    talkBtn.disabled = false;
+                    talkBtn.classList.add('talk-btn-pulse');
+                    updateStatusText("Click the button to speak");
+                } else {
+                    talkBtn.disabled = true;
+                    console.log('[stopListening] left in processing state');
+                }
+            }
+
+            function cleanupMicrophone() {
+                if (currentMicStream) {
+                    currentMicStream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log('[cleanupMicrophone] stopped track');
+                    });
+                    currentMicStream = null;
+                }
+            }
+
+            talkBtn.addEventListener('click', () => {
+                const now = Date.now();
+                if (now - lastClickTime < 500) return;
+                lastClickTime = now;
+
+                if (isRecording) stopListening(false);
+                else startListening();
+            });
+
+            async function sendTranscriptToServer(transcript) {
+                updateStatusText("Thinking...");
+                talkBtn.disabled = true;
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: transcript })
+                    });
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        if (response.status === 429) {
+                            console.warn('[sendTranscriptToServer] rate limited, waiting 2s');
+                            await new Promise(r => setTimeout(r, 2000));
+
+                            const retryResponse = await fetch('/chat', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ message: transcript })
+                            });
+
+                            if (!retryResponse.ok) {
+                                const retryData = await retryResponse.json();
+                                throw new Error(retryData.error || 'Server error after retry');
+                            }
+
+                            const retryData = await retryResponse.json();
+                            await handleServerResponse(retryData);
+                            return;
+                        }
+                        throw new Error(data.error || 'Server error');
+                    }
+
+                    await handleServerResponse(data);
+
+                } catch (error) {
+                    console.error("Error communicating with server:", error);
+                    updateStatusText(`Error: ${error.message}`);
+                    stopListening();
+                } finally {
+                    if (!isRecording) {
+                        setTimeout(() => {
+                            talkBtn.disabled = false;
+                            talkBtn.classList.add('talk-btn-pulse');
+                        }, 200);
+                    }
+                }
+            }
+
+            async function handleServerResponse(data) {
+                console.log("server /chat response:", data);
+
+                let audioUrl = data.audioUrl;
+                if (!audioUrl && Array.isArray(data.history) && data.history.length) {
+                    const last = data.history[data.history.length - 1];
+                    audioUrl = last?.audioUrl || null;
+                }
+
+                if (audioUrl) {
+                    // convert remote Murf/S3 URL into our proxied URL so WebAudio can access it
+                    const proxiedUrl = `/audio-proxy?url=${encodeURIComponent(audioUrl)}`;
+
+                    // pass the proxied URL to the player/visualizer
+                    await playAIResponse(proxiedUrl);
+                } else {
+                    console.error("No audioUrl found in server response.");
+                    updateStatusText("No audio received");
+                    stopListening();
+                }
+            }
+
+            // Replace your current playAIResponse(audioUrl) with this function
+            async function playAIResponse(audioUrl) {
+                updateStatusText("Speaking.");
+
+                // create audio element using the provided URL (proxied or raw)
+                const audio = new Audio(audioUrl);
+                audio.crossOrigin = 'anonymous';
+
+                // Try to set up visualizer (if you have it); fall back to direct play if it fails
+                try {
+                    setupAudioPlaybackVisualizer(audio);
+                } catch (err) {
+                    console.warn('[playAIResponse] setupAudioPlaybackVisualizer failed — playing directly', err);
+                }
+
+                try {
+                    await audio.play();
+                    // wait for audio to finish
+                    await new Promise(resolve => { audio.onended = resolve; });
+
+                    // Playback finished — now attempt to reopen mic automatically
+                    updateStatusText("Listening...");
+                    // short delay to avoid race conditions between audio teardown and mic start
+                    setTimeout(async () => {
+                        try {
+                            // Try to start listening automatically
+                            await startListening();
+                            console.log('[playAIResponse] auto re-opened microphone');
+                        } catch (err) {
+                            // If startListening fails (likely due to browser permission/user gesture),
+                            // gracefully fall back to enabling the talk button and showing instructions.
+                            console.warn('[playAIResponse] auto startListening failed:', err);
+                            updateStatusText("Click the button to speak");
+                            talkBtn.disabled = false;
+                            talkBtn.classList.add('talk-btn-pulse');
+                            // reset icon to microphone
+                            if (talkBtnIcon) talkBtnIcon.textContent = 'mic';
+                        }
+                    }, 400); // 400ms delay - tweak if needed
+
+                } catch (err) {
+                    console.error("Audio playback error:", err);
+                    updateStatusText("Error playing audio.");
+                    // Ensure UI returns to ready state
+                    talkBtn.disabled = false;
+                    talkBtn.classList.add('talk-btn-pulse');
+                    if (talkBtnIcon) talkBtnIcon.textContent = 'mic';
+                } finally {
+                    // Tidy up any lingering audio graph pointers; actual playback and mic state handled above
+                    sourceNode = null;
+                }
+            }
+
+
+            async function setupMicrophoneVisualizer() {
+                if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                try {
+                    if (sourceNode) {
+                        try {
+                            sourceNode.disconnect();
+                        } catch (e) { console.warn('[cleanup sourceNode]', e); }
+                        sourceNode = null;
+                    }
+
+                    cleanupMicrophone();
+
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    currentMicStream = stream;
+                    sourceNode = audioContext.createMediaStreamSource(stream);
+                    // Don't route mic to destination (avoid feedback) — visualiser only
+                    setupAnalyser(false);
+                } catch (err) {
+                    console.error('[setupMicrophoneVisualizer] getUserMedia failed', err);
+                }
+            }
+
+            function setupAudioPlaybackVisualizer(audioElement) {
+                if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                try {
+                    if (sourceNode) {
+                        try { sourceNode.disconnect(); } catch (e) { console.warn('[cleanup sourceNode]', e); }
+                        sourceNode = null;
+                    }
+
+                    cleanupMicrophone();
+
+                    sourceNode = audioContext.createMediaElementSource(audioElement);
+                    // For playback, connect analyser -> destination so user can hear audio
+                    setupAnalyser(true);
+                } catch (err) {
+                    console.error('[setupAudioPlaybackVisualizer] error', err);
+                }
+            }
+
+            function setupAnalyser(connectToDestination = false) {
+                if (!audioContext || !sourceNode) return;
+
+                if (analyser) {
+                    try { analyser.disconnect(); } catch (e) { /* ignore */ }
+                }
+
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+
+                try {
+                    sourceNode.connect(analyser);
+                    if (connectToDestination) analyser.connect(audioContext.destination);
+                } catch (err) {
+                    console.warn('[setupAnalyser] connect failed', err);
+                }
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+            }
+
+            const originalVertices = geometry.attributes.position.clone();
+            function animate() {
+                requestAnimationFrame(animate);
+                const time = Date.now() * 0.0005;
+
+                if (analyser && sourceNode) {
+                    analyser.getByteFrequencyData(dataArray);
+                    const positionAttribute = geometry.attributes.position;
+                    for (let i = 0; i < positionAttribute.count; i++) {
+                        const vertex = new THREE.Vector3().fromBufferAttribute(originalVertices, i);
+                        const loudness = dataArray[i % dataArray.length] / 255;
+                        vertex.normalize().multiplyScalar(2 + loudness * 0.5);
+                        positionAttribute.setXYZ(i, vertex.x, vertex.y, vertex.z);
+                    }
+                    geometry.attributes.position.needsUpdate = true;
+                    geometry.computeVertexNormals();
+                } else {
+                    sphere.position.y = Math.sin(time) * 0.1;
+                }
+
+                sphere.rotation.y += 0.001;
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            window.addEventListener('resize', () => {
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+            });
+        });
+    </script>
+</body>
+
+</html>
