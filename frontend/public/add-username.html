@@ -200,7 +200,7 @@
 
                 try {
                     // Include both username and voiceId in the request body
-                    const res = await fetch('/generate-persona', {
+                    const res = await fetch('https://insta-ai.onrender.com/generate-persona', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ username, voiceId }) // Updated body
