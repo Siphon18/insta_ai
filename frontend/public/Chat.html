@@ -326,7 +326,7 @@
         try {
           setInstaStatus('Loading posts...');
 
-          const resp = await fetch(`https://www.google.com/search?q=https://insta-ai.onrender.com/instagram-posts%3Fusername%3D${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`);
+          const resp = await fetch(`https://insta-ai.onrender.com/instagram-posts%3Fusername%3D${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`);
 
           if (!resp.ok) {
             const errorData = await resp.json().catch(() => ({}));
