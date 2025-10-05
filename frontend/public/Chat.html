@@ -326,7 +326,7 @@
         try {
           setInstaStatus('Loading posts...');
 
-          const resp = await fetch(`${INSTAGRAM_POSTS_ENDPOINT}?username=${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`);
+          const resp = await fetch(`https://www.google.com/search?q=https://insta-ai.onrender.com/instagram-posts%3Fusername%3D${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`);
 
           if (!resp.ok) {
             const errorData = await resp.json().catch(() => ({}));
@@ -550,7 +550,7 @@
         addTypingIndicator();
 
         try {
-          const response = await fetch('/chat', {
+          const response = await fetch('https://insta-ai.onrender.com/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: userMessage })
@@ -624,7 +624,7 @@
 
       async function loadAndRenderHistory() {
         try {
-          const response = await fetch('/get-chat-history');
+          const response = await fetch('https://insta-ai.onrender.com/get-chat-history');
           if (!response.ok) throw new Error('Network response was not ok');
           const history = await response.json();
           if (history && history.length > 0) {
@@ -780,7 +780,7 @@
           newChatBtn.setAttribute('aria-busy', 'true');
 
           try {
-            const resp = await fetch('/new-chat', {
+            const resp = await fetch('https://insta-ai.onrender.com/new-chat', {
               method: 'POST',
               credentials: 'same-origin',
               headers: { 'Content-Type': 'application/json' },
