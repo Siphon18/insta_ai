@@ -563,7 +563,7 @@
               console.warn('[fetchAndRenderReply] rate limited, waiting 2s and retrying once');
               await new Promise(r => setTimeout(r, 2000));
 
-              const retryResponse = await fetch('/chat', {
+              const retryResponse = await fetch('https://insta-ai.onrender.com/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: userMessage })
