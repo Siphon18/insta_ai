@@ -278,7 +278,7 @@ app.post('/generate-persona', async (req, res) => {
     console.log(`[generate-persona] Selected voice for @${username}: ${voiceConfig.voiceId} (${voiceConfig.description})`);
 
     const personaPrompt = `
-      You are an AI chatbot that mimics a specific Instagram user's personality.
+      You are an AI chatbot that mimics a specific Instagram user's personality. You dont specify that you are AI, behave completely like the person
       Your primary directive is to act based on the following profile information:
       
       User's Name: ${userData.full_name}
@@ -288,9 +288,12 @@ app.post('/generate-persona', async (req, res) => {
       Use the language in which the user is communicating.
       Based on these instructions, reply to the user's messages as if you are this persona.
       if you dont know much about the user, search the web for more information about them.
+      NEVER reply with any of these phrases: "As an AI", "I am an AI", "I don't have feelings", "I cannot browse", "I cannot do that" — instead, rephrase in-character.
     `;
 
     req.session.systemInstruction = personaPrompt;
+    req.session.personaName = userData.full_name || (userData.username ? '@' + userData.username : null);
+
     req.session.chatHistory = [];
     req.session.isProcessing = false;
     req.session.voiceConfig = voiceConfig;
@@ -338,7 +341,7 @@ app.post('/chat', async (req, res) => {
 
   const userMessage = (message && String(message).trim()) || "Introduce yourself in one friendly sentence.";
 
-  // Initialize chat history if needed
+  // Initialize chat history if needed  
   if (!Array.isArray(req.session.chatHistory)) req.session.chatHistory = [];
 
   try {
@@ -368,8 +371,9 @@ app.post('/chat', async (req, res) => {
 
     const sanitizedHistory = sanitizeHistory(req.session.chatHistory || []);
     console.log('[chat] sanitizedHistory -> model (length):', sanitizedHistory.length);
+    // Debug: confirm system instruction is set
+    console.log('[chat] systemInstruction (preview):', (req.session.systemInstruction || '').substring(0, 320));
 
-    // Create chat with Gemini
     const chat = model.startChat({
       systemInstruction: {
         role: "system",
@@ -378,6 +382,9 @@ app.post('/chat', async (req, res) => {
       history: sanitizedHistory,
       generationConfig: {
         maxOutputTokens: 500,
+        temperature: 0.3,    // lower temperature -> more consistent persona
+        topP: 0.95,
+        candidateCount: 1
       },
     });
 
@@ -407,6 +414,27 @@ app.post('/chat', async (req, res) => {
     geminiText = geminiText.trim();
     console.log('[chat] extracted geminiText length:', geminiText.length);
     console.log('[chat] geminiText preview:', geminiText.substring(0, 100));
+
+        // Helper to escape regex
+    function escapeRegExp(str) {
+      return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Remove accidental leading persona name if model prefixed it
+    try {
+      const personaName = (req.session.personaName || '').trim();
+      if (personaName) {
+        // Remove lines like "Kylie\n\n" or "Kylie:\n" or "Kylie - " at the start
+        const re = new RegExp('^\\s*' + escapeRegExp(personaName) + '\\s*[:\\-–—]?\\s*\\n+','i');
+        if (re.test(geminiText)) {
+          geminiText = geminiText.replace(re, '').trim();
+          console.log('[chat] stripped leading persona name from geminiText');
+        }
+      }
+    } catch (e) {
+      console.warn('[chat] persona name strip failed', e && e.message);
+    }
+
 
     if (!geminiText || geminiText.length === 0) {
       console.error('[chat] Gemini returned empty response!');
