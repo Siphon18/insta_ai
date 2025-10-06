@@ -326,7 +326,9 @@
         try {
           setInstaStatus('Loading posts...');
 
-          const resp = await fetch(`https://insta-ai.onrender.com/instagram-posts%3Fusername%3D${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`);
+const resp = await fetch(`/instagram-posts?username=${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`, {
+  credentials: 'same-origin'
+});
 
           if (!resp.ok) {
             const errorData = await resp.json().catch(() => ({}));
@@ -550,11 +552,13 @@
         addTypingIndicator();
 
         try {
-          const response = await fetch('https://insta-ai.onrender.com/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: userMessage })
-          });
+const response = await fetch('/chat', {
+  method: 'POST',
+  credentials: 'same-origin',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message: userMessage })
+});
+
 
           const data = await response.json();
 
@@ -563,11 +567,13 @@
               console.warn('[fetchAndRenderReply] rate limited, waiting 2s and retrying once');
               await new Promise(r => setTimeout(r, 2000));
 
-              const retryResponse = await fetch('https://insta-ai.onrender.com/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: userMessage })
-              });
+const retryResponse = await fetch('/chat', {
+  method: 'POST',
+  credentials: 'same-origin',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message: userMessage })
+});
+
 
               if (!retryResponse.ok) {
                 const retryData = await retryResponse.json();
@@ -624,7 +630,7 @@
 
       async function loadAndRenderHistory() {
         try {
-          const response = await fetch('https://insta-ai.onrender.com/get-chat-history');
+          const response = await fetch('/get-chat-history', { credentials: 'same-origin' });
           if (!response.ok) throw new Error('Network response was not ok');
           const history = await response.json();
           if (history && history.length > 0) {
@@ -780,11 +786,12 @@
           newChatBtn.setAttribute('aria-busy', 'true');
 
           try {
-            const resp = await fetch('https://insta-ai.onrender.com/new-chat', {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json' },
-            });
+const resp = await fetch('/new-chat', {
+  method: 'POST',
+  credentials: 'same-origin',
+  headers: { 'Content-Type': 'application/json' },
+});
+
 
             console.log('[new-chat] response status', resp.status);
             if (resp.ok) {
