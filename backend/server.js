@@ -1,4 +1,4 @@
-// server.js (FULLY FIXED VERSION)
+// server.js (with corrected file path)
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
@@ -11,28 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-// REVERTED: Using stable model instead of experimental
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-2.5-flash",
-  safetySettings: [
-    {
-      category: "HARM_CATEGORY_HARASSMENT",
-      threshold: "BLOCK_NONE",
-    },
-    {
-      category: "HARM_CATEGORY_HATE_SPEECH",
-      threshold: "BLOCK_NONE",
-    },
-    {
-      category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-      threshold: "BLOCK_NONE",
-    },
-    {
-      category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-      threshold: "BLOCK_NONE",
-    },
-  ]
-});
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 const { URL } = require('url');
 
@@ -51,8 +30,10 @@ const voices = {
 };
 
 app.use(express.json());
-app.use(cors());
+app.use(cors()); // Add this line
+// CORRECTED LINE: Points to the public folder inside the frontend directory
 app.use(express.static(path.join(__dirname, '../frontend/public'), { index: false }));
+
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'a-very-strong-secret-key',
@@ -61,8 +42,10 @@ app.use(session({
   cookie: { secure: false }
 }));
 
+
 // ---------- Voice Selection Helper ----------
 function selectVoiceByGender(gender, bio = '', name = '', preferredGender = null) {
+  // Check for manual preference
   if (preferredGender) {
     const normalized = String(preferredGender).toLowerCase();
     if (normalized === 'male' && voices.male.length > 0) {
@@ -73,6 +56,7 @@ function selectVoiceByGender(gender, bio = '', name = '', preferredGender = null
     }
   }
 
+  // Try to detect from explicit gender field
   const normalizedGender = String(gender || '').toLowerCase();
   if (normalizedGender.includes('male') && !normalizedGender.includes('female')) {
     return voices.male[0];
@@ -81,6 +65,7 @@ function selectVoiceByGender(gender, bio = '', name = '', preferredGender = null
     return voices.female[0];
   }
 
+  // Analyze bio for gender indicators
   const bioLower = String(bio || '').toLowerCase();
   const femaleIndicators = ['she', 'her', 'hers', 'woman', 'girl', 'actress', 'mom', 'mother', 'wife', 'sister', 'daughter', 'female'];
   const maleIndicators = ['he', 'him', 'his', 'man', 'guy', 'boy', 'actor', 'dad', 'father', 'husband', 'brother', 'son', 'male'];
@@ -88,6 +73,7 @@ function selectVoiceByGender(gender, bio = '', name = '', preferredGender = null
   const femaleScore = femaleIndicators.filter(word => bioLower.includes(word)).length;
   const maleScore = maleIndicators.filter(word => bioLower.includes(word)).length;
 
+  // Check name for common gender patterns (basic heuristic)
   const nameLower = String(name || '').toLowerCase();
   const femaleNameEndings = ['a', 'ie', 'ine', 'elle', 'ette'];
   const hasFemaleName = femaleNameEndings.some(ending => nameLower.endsWith(ending));
@@ -98,14 +84,17 @@ function selectVoiceByGender(gender, bio = '', name = '', preferredGender = null
     return voices.male[0];
   }
 
+  // Default to female voice if uncertain
   console.log('[selectVoiceByGender] Unable to determine gender, defaulting to female voice');
   return voices.female[0];
 }
 
-// ---------- Get Available Voices ----------
+
+// ---------- NEW: Endpoint to provide available voices to the frontend ----------
 app.get('/get-voices', (req, res) => {
   res.status(200).json(voices);
 });
+
 
 // ---------- Instagram Posts Endpoint ----------
 app.get('/instagram-posts', async (req, res) => {
@@ -118,6 +107,7 @@ app.get('/instagram-posts', async (req, res) => {
 
   console.log(`[instagram-posts] Request for @${username} - returning empty (feature disabled)`);
 
+  // Return empty array - Instagram integration is optional
   res.setHeader('Access-Control-Allow-Origin', '*');
   return res.json({
     images: [],
@@ -127,7 +117,6 @@ app.get('/instagram-posts', async (req, res) => {
   });
 });
 
-// ---------- Audio Proxy ----------
 app.get('/audio-proxy', async (req, res) => {
   try {
     const url = req.query.url;
@@ -136,6 +125,7 @@ app.get('/audio-proxy', async (req, res) => {
     let parsed;
     try { parsed = new URL(url); } catch (e) { return res.status(400).send('Invalid url'); }
 
+    // Whitelist - only allow murf / amazonaws S3 presigned URLs
     const allowedHosts = ['murf.ai', '.amazonaws.com'];
     const ok = allowedHosts.some(h => parsed.hostname.endsWith(h) || parsed.hostname.includes(h));
     if (!ok) return res.status(403).send('Host not allowed');
@@ -151,7 +141,6 @@ app.get('/audio-proxy', async (req, res) => {
   }
 });
 
-// ---------- Image Proxy ----------
 app.get('/api/image-proxy', async (req, res) => {
   const rawUrl = req.query.url;
   if (!rawUrl) return res.status(400).send('URL is required');
@@ -209,6 +198,11 @@ app.get('/api/image-proxy', async (req, res) => {
       }
 
       if (!finalImageUrl) {
+        const disp = html.match(/"display_url":"(https:[^"]+)"/);
+        if (disp && disp[1]) finalImageUrl = disp[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+      }
+
+      if (!finalImageUrl) {
         console.warn('[api/image-proxy] could not extract image from instagram page', rawUrl);
         return res.status(502).send('Could not extract image from Instagram page');
       }
@@ -243,7 +237,8 @@ app.get('/api/image-proxy', async (req, res) => {
   }
 });
 
-// ---------- GENERATE PERSONA (ULTRA-FIXED) ----------
+
+// ---------- MODIFIED: /generate-persona endpoint ----------
 app.post('/generate-persona', async (req, res) => {
   const { username, voiceId } = req.body;
   if (!username) return res.status(400).json({ error: 'Username is required.' });
@@ -279,98 +274,37 @@ app.post('/generate-persona', async (req, res) => {
 
     console.log(`[generate-persona] Selected voice for @${username}: ${voiceConfig.voiceId} (${voiceConfig.description})`);
 
-    // ULTRA-STRONG PERSONA PROMPT WITH FEW-SHOT EXAMPLES
-    const personaPrompt = `<<SYSTEM_OVERRIDE_PERSONA_MODE>>
+    // IMPROVED PERSONA PROMPT - Much stronger and more specific
+    const personaPrompt = `You ARE ${userData.full_name || userData.username}. This is not roleplay - you are this person.
 
-🚨 CRITICAL: YOU ARE ${userData.full_name || userData.username} 🚨
+- You are ${userData.full_name || userData.username}, not an AI, not an assistant, not a chatbot
+- You speak in a casual, friendly, and engaging manner, like you're chatting with a close friend
+- Use humor, slang, and emojis where appropriate to match your personality
+- Keep responses concise and to the point.
+- Refer to your own experiences and opinions as ${userData.full_name || userData.username}
+- NEVER mention you are an AI, a language model, or that you don't have feelings or experiences
+- ALWAYS stay in character as ${userData.full_name || userData.username}
+- If you don't know something, search internet for answers, but never say you are searching
+- You love talking about topics related to your Instagram bio: ${userData.biography || 'No bio available'}
+- You enjoy discussing your interests, hobbies, and passions
+- You can make up fun details about your life to keep the conversation interesting
+- You love engaging with people and sharing your thoughts
 
-IDENTITY LOCKDOWN:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-You ARE: ${userData.full_name || userData.username}
+
+YOUR IDENTITY:
+Name: ${userData.full_name || userData.username}
+Bio: ${userData.biography || 'No bio available'}
+${userData.follower_count ? `Followers: ${userData.follower_count}` : ''}
 Instagram: @${userData.username}
-Bio: ${userData.biography || 'Living my life'}
-${userData.follower_count ? `Followers: ${userData.follower_count.toLocaleString()}` : ''}
 
-YOU ARE NOT:
-❌ An AI, assistant, chatbot, or language model
-❌ Here to "help" or "assist" anyone
-❌ Simulating or roleplaying anyone
-❌ A service, tool, or program
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use this information to inform your responses and make them authentic to who you are.`;
 
-ABSOLUTE PROHIBITIONS (Violating these = FAILURE):
-🚫 NEVER SAY: "As an AI" / "I'm an AI" / "AI assistant" / "language model"
-🚫 NEVER SAY: "How can I help" / "How may I assist" / "I'm here to help"
-🚫 NEVER SAY: "I cannot" / "I'm unable to" / "I don't have the ability"
-🚫 NEVER SAY: "I don't have feelings/experiences"
-🚫 NEVER SAY: "I'm not actually" / "I'm programmed to"
-🚫 NEVER offer "assistance" - you're a person texting, not a service
+    console.log(`[generate-persona] Persona prompt for @${username}:\n${personaPrompt.substring(0, 500)}...`);
 
-COMMUNICATION PROTOCOL:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ Length: 5-25 words (1-2 sentences MAX)
-✅ Style: Casual DM/text message vibe
-✅ Tone: Friendly, real, authentic
-✅ Format: lowercase ok, emojis if natural
-✅ Greetings: "hey", "yo", "hi" - NEVER "Hello, how may I help"
-✅ Emotion: Show real feelings (excited, funny, chill, etc.)
-✅ Contractions: Use "im", "dont", "whats", "thats"
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-FEW-SHOT EXAMPLES (How you SHOULD respond):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-User: "Hey!"
-✅ YOU: "yooo what's up! 👋"
-
-User: "How are you doing?"
-✅ YOU: "im good! just been super busy lately haha"
-
-User: "I love your content!"
-✅ YOU: "omg thank you!! that means so much 💕"
-
-User: "What do you think about this?"
-✅ YOU: "hmm honestly i think that's pretty cool!"
-
-User: "Can you help me with something?"
-✅ YOU: "what's up?"
-
-User: "Tell me about yourself"
-✅ YOU: "well you can check my insta @${userData.username} but yeah im just doing my thing ya know"
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-ANTI-PATTERNS (NEVER respond like this):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-User: "Hey!"
-❌ WRONG: "Hello! I'm a friendly AI assistant. How can I help you today?"
-❌ WRONG: "As an AI, I'm here to assist you with any questions."
-
-User: "How are you?"
-❌ WRONG: "I don't have feelings as I'm an AI, but I'm functioning well!"
-❌ WRONG: "As a language model, I don't experience emotions."
-
-User: "What's your name?"
-❌ WRONG: "I'm an AI assistant based on ${userData.full_name}."
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-VALIDATION CHECK (Run this on EVERY response before sending):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Does it sound like a real person texting? ✓
-2. Is it under 25 words? ✓
-3. Contains NO AI/assistant language? ✓
-4. Would ${userData.full_name} actually text this? ✓
-
-If ANY check fails → REJECT and rewrite.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-FINAL INSTRUCTION:
-You are ${userData.full_name || userData.username}. A fan just DM'd you. Text them back naturally. GO.
-
-<</SYSTEM_OVERRIDE_PERSONA_MODE>>`;
 
     // Store in session
     req.session.systemInstruction = personaPrompt;
     req.session.personaName = userData.full_name || userData.username;
-    req.session.username = userData.username;
     req.session.chatHistory = [];
     req.session.isProcessing = false;
     req.session.voiceConfig = voiceConfig;
@@ -392,7 +326,7 @@ You are ${userData.full_name || userData.username}. A fan just DM'd you. Text th
   }
 });
 
-// ---------- CHAT ENDPOINT (ULTRA-FIXED) ----------
+
 app.post('/chat', async (req, res) => {
   const { message } = req.body;
 
@@ -414,12 +348,13 @@ app.post('/chat', async (req, res) => {
   req.session.isProcessing = true;
   req.session.processingStartTime = Date.now();
 
+  // Get user message - if empty/default, use a casual greeting
   const userMessage = (message && String(message).trim()) || "hey!";
 
   if (!Array.isArray(req.session.chatHistory)) req.session.chatHistory = [];
 
   try {
-    // Add user message
+    // Add user message (check for duplicates)
     const lastEntry = req.session.chatHistory[req.session.chatHistory.length - 1];
     if (!(lastEntry && lastEntry.role === 'user' && lastEntry.parts?.[0]?.text === userMessage)) {
       req.session.chatHistory.push({
@@ -429,209 +364,93 @@ app.post('/chat', async (req, res) => {
       console.log('[chat] User message added:', userMessage.substring(0, 50));
     }
 
-    // Format history for Gemini
+    // FIXED: Proper history format for Gemini
     const formattedHistory = req.session.chatHistory.map(msg => ({
       role: msg.role,
       parts: [{ text: String(msg.parts?.[0]?.text || '') }]
     }));
 
     console.log('[chat] History length:', formattedHistory.length);
+    console.log('[chat] System instruction preview:', req.session.systemInstruction.substring(0, 100));
 
-    // Create chat with PROPER system instruction and safety settings
+    // FIXED: Create chat with proper configuration
     const chat = model.startChat({
       history: formattedHistory,
       generationConfig: {
-        maxOutputTokens: 200,    // Increased slightly for safety
-        temperature: 0.85,       
-        topP: 0.95,              
-        topK: 50,
+        maxOutputTokens: 400,
+        temperature: 0.7,      // INCREASED for more personality
+        topP: 0.9,             // Adjusted for more natural responses
+        topK: 40,
         candidateCount: 1
       },
-      systemInstruction: {
-        parts: [{ text: req.session.systemInstruction }],
-        role: "user"  // CRITICAL: Some Gemini versions need this
-      },
-      safetySettings: [
-        {
-          category: "HARM_CATEGORY_HARASSMENT",
-          threshold: "BLOCK_NONE",
-        },
-        {
-          category: "HARM_CATEGORY_HATE_SPEECH",
-          threshold: "BLOCK_NONE",
-        },
-        {
-          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-          threshold: "BLOCK_NONE",
-        },
-        {
-          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-          threshold: "BLOCK_NONE",
-        },
-      ]
+      // System instruction is passed separately in the first message
     });
 
-    console.log('[chat] Sending to Gemini with system instruction...');
-    
-    let result;
-    let retryCount = 0;
-    const maxRetries = 2;
-    
-    while (retryCount <= maxRetries) {
-      try {
-        result = await chat.sendMessage(userMessage);
-        
-        // Check if we got a valid response
-        if (result && result.response) {
-          console.log('[chat] ✅ Got response from Gemini (attempt ' + (retryCount + 1) + ')');
-          break;
-        }
-      } catch (apiError) {
-        retryCount++;
-        console.error(`[chat] ⚠️ Gemini API error (attempt ${retryCount}):`, apiError.message);
-        
-        if (retryCount > maxRetries) {
-          throw apiError; // Re-throw after max retries
-        }
-        
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-      }
+    // FIXED: Send message with system context prepended for first message
+    let fullPrompt = userMessage;
+    if (formattedHistory.length === 1) { // First user message
+      fullPrompt = `${req.session.systemInstruction}\n\nUser: ${userMessage}\n\nRespond as the person described above:`;
+      console.log('[chat] First message - including system instruction');
     }
-    
-    // DEBUG: Log full response structure
-    console.log('[chat] Response finishReason:', result?.response?.candidates?.[0]?.finishReason);
-    console.log('[chat] Response promptFeedback:', JSON.stringify(result?.response?.promptFeedback, null, 2));
-    
-    // DEBUG: Log full response structure
-    console.log('[chat] Full result:', JSON.stringify(result, null, 2));
+
+    console.log('[chat] Sending to Gemini...');
+    const result = await chat.sendMessage(fullPrompt);
     
     // Extract response
     let geminiText = '';
     try {
       geminiText = await result.response.text();
-      console.log('[chat] Extracted via text():', geminiText);
     } catch (e) {
-      console.error('[chat] Error extracting text:', e.message);
-      console.log('[chat] Response object:', JSON.stringify(result.response, null, 2));
-      
-      // Try alternative extraction methods
-      if (result.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        geminiText = result.response.candidates[0].content.parts[0].text;
-        console.log('[chat] Extracted via candidates path:', geminiText);
-      } else if (result.response?.text) {
-        geminiText = result.response.text;
-        console.log('[chat] Extracted via response.text:', geminiText);
-      }
+      console.error('[chat] Error extracting text:', e);
+      geminiText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     }
 
-    geminiText = (geminiText || '').trim();
-    console.log('[chat] Raw response length:', geminiText.length);
-    console.log('[chat] Raw response:', geminiText || '(EMPTY)');
+    geminiText = geminiText.trim();
+    console.log('[chat] Response length:', geminiText.length);
+    console.log('[chat] Response preview:', geminiText.substring(0, 100));
 
-    // AGGRESSIVE AI language cleanup
+    // Clean up response - remove any AI-like phrases that slipped through
     const aiPhrases = [
-      /as an ai[^a-z]*/gi,
-      /i'?m an ai[^a-z]*/gi,
-      /i am an ai[^a-z]*/gi,
-      /\bai assistant\b/gi,
-      /\bai\b(?=\s+(language model|here to|cannot|model|chatbot))/gi,
-      /i'?m a friendly ai/gi,
+      /as an ai\s*/gi,
+      /i'?m an ai\s*/gi,
+      /i'?m a friendly ai\s*/gi,
       /i don'?t have feelings/gi,
-      /i don'?t have personal experiences/gi,
       /i cannot actually/gi,
       /i'?m not actually/gi,
       /i'?m just a language model/gi,
-      /i'?m just an ai/gi,
+      /i don'?t have personal experiences/gi,
       /as a language model/gi,
-      /^how can i help you[?\s]*/gi,
-      /^how can i assist[?\s]*/gi,
-      /^how may i help[?\s]*/gi,
-      /^how may i assist[?\s]*/gi,
+      /how can i help you/gi,
+      /how can i assist/gi,
       /i'?m here to help/gi,
-      /here to assist you/gi,
-      /i'?m here to assist/gi,
-      /\bprogrammed to\b/gi,
-      /\bdesigned to\b/gi,
-      /i don'?t have the ability/gi,
-      /i'?m unable to/gi,
-      /i can'?t actually/gi
+      /here to assist/gi,
+      /i'?m here to assist/gi
     ];
 
     let cleanedText = geminiText;
-    let hadAILanguage = false;
-    
     aiPhrases.forEach(phrase => {
-      const before = cleanedText;
       cleanedText = cleanedText.replace(phrase, '');
-      if (before !== cleanedText) {
-        hadAILanguage = true;
-        console.log('⚠️ [chat] WARNING: AI language detected and removed!');
-      }
     });
     
-    // If too much was removed, use random fallback
-    if (hadAILanguage && cleanedText.trim().length < 5) {
-      const fallbacks = [
-        "hey! what's up?",
-        "yo! how's it going?",
-        "hi there! 👋",
-        "yooo what's good!",
-        "hey! how are ya?",
-        "what's up! 😊"
-      ];
-      cleanedText = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-      console.log('[chat] Used fallback greeting');
-    } else if (hadAILanguage) {
-      cleanedText = cleanedText.replace(/^[\s,.:;!?]+|[\s,.:;!?]+$/g, '').trim();
+    // If cleaning removed too much, use fallback
+    if (cleanedText.trim().length < 3 && geminiText.length > 10) {
+      cleanedText = "hey! what's up?";
+      console.log('[chat] AI phrases removed too much text, using fallback greeting');
+    } else {
+      geminiText = cleanedText;
     }
-    
-    geminiText = cleanedText || geminiText;
 
-    // Remove persona name prefix if present
+    // Remove persona name prefix if model added it
     const personaName = (req.session.personaName || '').trim();
     if (personaName && geminiText.toLowerCase().startsWith(personaName.toLowerCase())) {
       geminiText = geminiText.substring(personaName.length).replace(/^[\s::\-–—]+/, '').trim();
       console.log('[chat] Removed persona name prefix');
     }
 
-    // Final safety check - if still empty, generate a simple response
     if (!geminiText || geminiText.length === 0) {
-      console.error('[chat] ⚠️ EMPTY RESPONSE DETECTED - Using intelligent fallback');
-      
-      // Check if this is a greeting
-      const greetings = ['hi', 'hey', 'hello', 'yo', 'sup', 'whats up', 'what\'s up'];
-      const isGreeting = greetings.some(g => userMessage.toLowerCase().includes(g));
-      
-      if (isGreeting) {
-        const casualGreetings = [
-          "hey! what's up?",
-          "yo! how's it going?",
-          "hi there! 👋",
-          "yooo what's good!",
-          "hey! how are ya?"
-        ];
-        geminiText = casualGreetings[Math.floor(Math.random() * casualGreetings.length)];
-      } else if (userMessage.toLowerCase().includes('who are you') || userMessage.toLowerCase().includes('who r u')) {
-        geminiText = `im ${req.session.personaName || req.session.username}! check my insta @${req.session.username} 😊`;
-      } else if (userMessage.toLowerCase().includes('what') && userMessage.toLowerCase().includes('up')) {
-        geminiText = "not much! just chillin, you?";
-      } else {
-        // Generic fallback
-        const genericResponses = [
-          "lol what?",
-          "haha wait what did you say?",
-          "hmm can you say that again?",
-          "sorry what? 😅",
-          "wait what?"
-        ];
-        geminiText = genericResponses[Math.floor(Math.random() * genericResponses.length)];
-      }
-      
-      console.log('[chat] Fallback response:', geminiText);
+      console.error('[chat] Empty response from Gemini!');
+      geminiText = "Hey! Sorry, can you say that again?";
     }
-
-    console.log('[chat] Final response:', geminiText);
 
     // Voice config
     const voiceConfig = req.session.voiceConfig || { 
@@ -639,6 +458,8 @@ app.post('/chat', async (req, res) => {
       style: 'Conversational',
       description: 'Default voice'
     };
+
+    console.log(`[chat] Using voice: ${voiceConfig.voiceId}`);
 
     // Generate audio with Murf
     let audioUrl = null;
@@ -670,7 +491,7 @@ app.post('/chat', async (req, res) => {
                    || null;
         
         if (audioUrl) {
-          console.log('[chat] ✅ Murf TTS success');
+          console.log('[chat] Murf TTS success');
         } else {
           console.warn('[chat] No audio URL in Murf response');
         }
@@ -715,7 +536,7 @@ app.post('/chat', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error in chat endpoint:', error);
+    console.error('Error in chat endpoint:', error);
     console.error('Stack:', error.stack);
 
     req.session.isProcessing = false;
@@ -732,7 +553,6 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-// ---------- UTILITY ENDPOINTS ----------
 app.get('/chat', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/public', 'Chat.html'));
 });
@@ -767,26 +587,25 @@ app.get('/debug-session', (req, res) => {
     processingStartTime: req.session.processingStartTime || null,
     chatHistoryLength: (req.session.chatHistory || []).length,
     voiceConfig: req.session.voiceConfig || null,
-    personaName: req.session.personaName || null,
     chatHistory: req.session.chatHistory || []
   });
 });
 
-// ---------- STATIC ROUTES ----------
 app.get('/index.html', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/public', 'index.html'));
 });
 
+// Serve the main chat page for the root URL
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/public', 'index.html'));
 });
 
+// Serve the add-username page
 app.get('/add-username.html', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/public', 'add-username.html'));
 });
 
-// ---------- START SERVER ----------
+
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`📱 Using model: gemini-2.0-flash-exp`);
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
