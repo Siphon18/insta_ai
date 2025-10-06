@@ -164,7 +164,7 @@ app.get('/api/image-proxy', async (req, res) => {
 
   const hostAllowed = hostname => allowedImageHosts.some(f => hostname.includes(f));
 
-  const isInstagramPostPage = parsed.hostname.includes('instagram.com') && /^\/p\/|^\/tv\/|^\/reel\a//.test(parsed.pathname);
+  const isInstagramPostPage = parsed.hostname.includes('instagram.com') && /^\/p\/|^\/tv\/|^\/reel\//.test(parsed.pathname);
 
   try {
     let finalImageUrl = null;
