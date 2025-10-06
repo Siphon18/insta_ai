@@ -401,6 +401,7 @@ app.post('/chat', async (req, res) => {
     const chat = model.startChat({
       history: formattedHistory,
       generationConfig: {
+        systemInstruction: "You're ${userData.full_name || userData.username}. You're texting back. Be real, be you, be casual.`
         maxOutputTokens: 400,
         temperature: 0.7,      // INCREASED for more personality
         topP: 0.9,             // Adjusted for more natural responses
