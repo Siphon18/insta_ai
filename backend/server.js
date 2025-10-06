@@ -11,7 +11,28 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // UPDATED: Using newer model
+// REVERTED: Using stable model instead of experimental
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-2.5-flash",
+  safetySettings: [
+    {
+      category: "HARM_CATEGORY_HARASSMENT",
+      threshold: "BLOCK_NONE",
+    },
+    {
+      category: "HARM_CATEGORY_HATE_SPEECH",
+      threshold: "BLOCK_NONE",
+    },
+    {
+      category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+      threshold: "BLOCK_NONE",
+    },
+    {
+      category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+      threshold: "BLOCK_NONE",
+    },
+  ]
+});
 
 const { URL } = require('url');
 
@@ -416,35 +437,97 @@ app.post('/chat', async (req, res) => {
 
     console.log('[chat] History length:', formattedHistory.length);
 
-    // Create chat with PROPER system instruction
+    // Create chat with PROPER system instruction and safety settings
     const chat = model.startChat({
       history: formattedHistory,
       generationConfig: {
-        maxOutputTokens: 150,    // Short responses = more natural
-        temperature: 0.9,         // High creativity = less robotic
+        maxOutputTokens: 200,    // Increased slightly for safety
+        temperature: 0.85,       
         topP: 0.95,              
-        topK: 60,
+        topK: 50,
         candidateCount: 1
       },
       systemInstruction: {
-        parts: [{ text: req.session.systemInstruction }]
-      }
+        parts: [{ text: req.session.systemInstruction }],
+        role: "user"  // CRITICAL: Some Gemini versions need this
+      },
+      safetySettings: [
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_NONE",
+        },
+      ]
     });
 
     console.log('[chat] Sending to Gemini with system instruction...');
-    const result = await chat.sendMessage(userMessage);
+    
+    let result;
+    let retryCount = 0;
+    const maxRetries = 2;
+    
+    while (retryCount <= maxRetries) {
+      try {
+        result = await chat.sendMessage(userMessage);
+        
+        // Check if we got a valid response
+        if (result && result.response) {
+          console.log('[chat] ✅ Got response from Gemini (attempt ' + (retryCount + 1) + ')');
+          break;
+        }
+      } catch (apiError) {
+        retryCount++;
+        console.error(`[chat] ⚠️ Gemini API error (attempt ${retryCount}):`, apiError.message);
+        
+        if (retryCount > maxRetries) {
+          throw apiError; // Re-throw after max retries
+        }
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+      }
+    }
+    
+    // DEBUG: Log full response structure
+    console.log('[chat] Response finishReason:', result?.response?.candidates?.[0]?.finishReason);
+    console.log('[chat] Response promptFeedback:', JSON.stringify(result?.response?.promptFeedback, null, 2));
+    
+    // DEBUG: Log full response structure
+    console.log('[chat] Full result:', JSON.stringify(result, null, 2));
     
     // Extract response
     let geminiText = '';
     try {
       geminiText = await result.response.text();
+      console.log('[chat] Extracted via text():', geminiText);
     } catch (e) {
-      console.error('[chat] Error extracting text:', e);
-      geminiText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      console.error('[chat] Error extracting text:', e.message);
+      console.log('[chat] Response object:', JSON.stringify(result.response, null, 2));
+      
+      // Try alternative extraction methods
+      if (result.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        geminiText = result.response.candidates[0].content.parts[0].text;
+        console.log('[chat] Extracted via candidates path:', geminiText);
+      } else if (result.response?.text) {
+        geminiText = result.response.text;
+        console.log('[chat] Extracted via response.text:', geminiText);
+      }
     }
 
-    geminiText = geminiText.trim();
-    console.log('[chat] Raw response:', geminiText);
+    geminiText = (geminiText || '').trim();
+    console.log('[chat] Raw response length:', geminiText.length);
+    console.log('[chat] Raw response:', geminiText || '(EMPTY)');
 
     // AGGRESSIVE AI language cleanup
     const aiPhrases = [
@@ -512,10 +595,40 @@ app.post('/chat', async (req, res) => {
       console.log('[chat] Removed persona name prefix');
     }
 
-    // Final safety check
+    // Final safety check - if still empty, generate a simple response
     if (!geminiText || geminiText.length === 0) {
-      console.error('[chat] Empty response after cleanup!');
-      geminiText = "hey! sorry what?";
+      console.error('[chat] ⚠️ EMPTY RESPONSE DETECTED - Using intelligent fallback');
+      
+      // Check if this is a greeting
+      const greetings = ['hi', 'hey', 'hello', 'yo', 'sup', 'whats up', 'what\'s up'];
+      const isGreeting = greetings.some(g => userMessage.toLowerCase().includes(g));
+      
+      if (isGreeting) {
+        const casualGreetings = [
+          "hey! what's up?",
+          "yo! how's it going?",
+          "hi there! 👋",
+          "yooo what's good!",
+          "hey! how are ya?"
+        ];
+        geminiText = casualGreetings[Math.floor(Math.random() * casualGreetings.length)];
+      } else if (userMessage.toLowerCase().includes('who are you') || userMessage.toLowerCase().includes('who r u')) {
+        geminiText = `im ${req.session.personaName || req.session.username}! check my insta @${req.session.username} 😊`;
+      } else if (userMessage.toLowerCase().includes('what') && userMessage.toLowerCase().includes('up')) {
+        geminiText = "not much! just chillin, you?";
+      } else {
+        // Generic fallback
+        const genericResponses = [
+          "lol what?",
+          "haha wait what did you say?",
+          "hmm can you say that again?",
+          "sorry what? 😅",
+          "wait what?"
+        ];
+        geminiText = genericResponses[Math.floor(Math.random() * genericResponses.length)];
+      }
+      
+      console.log('[chat] Fallback response:', geminiText);
     }
 
     console.log('[chat] Final response:', geminiText);
@@ -675,5 +788,5 @@ app.get('/add-username.html', (req, res) => {
 // ---------- START SERVER ----------
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`📱 Using model: gemini-2.5-flash`);
+  console.log(`📱 Using model: gemini-2.0-flash-exp`);
 });
