@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); // UPDATED: Using newer model
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // UPDATED: Using newer model
 
 const { URL } = require('url');
 
@@ -675,5 +675,5 @@ app.get('/add-username.html', (req, res) => {
 // ---------- START SERVER ----------
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`📱 Using model: gemini-2.5-pro`);
+  console.log(`📱 Using model: gemini-2.5-flash`);
 });
