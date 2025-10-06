@@ -240,7 +240,7 @@ app.get('/api/image-proxy', async (req, res) => {
 
 // ---------- MODIFIED: /generate-persona endpoint ----------
 app.post('/generate-persona', async (req, res) => {
-  const { username, voiceId } = req.body; // Accept voiceId from the request
+  const { username, voiceId } = req.body;
   if (!username) return res.status(400).json({ error: 'Username is required.' });
 
   try {
@@ -258,14 +258,11 @@ app.post('/generate-persona', async (req, res) => {
     const userData = apiResponse.data;
 
     let voiceConfig;
-
-    // 1. Prioritize the user's selected voiceId
     if (voiceId) {
       const allVoices = [...voices.male, ...voices.female];
       voiceConfig = allVoices.find(v => v.voiceId === voiceId);
     }
     
-    // 2. If no valid voiceId was provided, fall back to gender detection
     if (!voiceConfig) {
       console.log(`[generate-persona] No valid voiceId provided. Falling back to gender detection for @${username}.`);
       voiceConfig = selectVoiceByGender(
@@ -277,23 +274,42 @@ app.post('/generate-persona', async (req, res) => {
 
     console.log(`[generate-persona] Selected voice for @${username}: ${voiceConfig.voiceId} (${voiceConfig.description})`);
 
-    const personaPrompt = `
-      You are an AI chatbot that mimics a specific Instagram user's personality. You dont specify that you are AI, behave completely like the person
-      Your primary directive is to act based on the following profile information:
-      
-      User's Name: ${userData.full_name}
-      User's Bio: ${userData.biography}
-      
-      Do not state that you are an AI. Respond as if you are the person.
-      Use the language in which the user is communicating.
-      Based on these instructions, reply to the user's messages as if you are this persona.
-      if you dont know much about the user, search the web for more information about them.
-      NEVER reply with any of these phrases: "As an AI", "I am an AI", "I don't have feelings", "I cannot browse", "I cannot do that" — instead, rephrase in-character.
-    `;
+    // IMPROVED PERSONA PROMPT - Much stronger and more specific
+    const personaPrompt = `You ARE ${userData.full_name || userData.username}. This is not roleplay - you are this person.
 
+CRITICAL IDENTITY RULES:
+- You are ${userData.full_name || userData.username}, not an AI assistant
+- NEVER say: "As an AI", "I'm an AI", "I cannot", "I don't have feelings", "I'm not actually", "I'm just a language model"
+- NEVER break character or mention that you're simulating anyone
+- Respond naturally as this person would in a casual conversation
+- Use first person ("I", "me", "my") when talking about yourself
+- Match the tone and style this person would use based on their bio
+
+YOUR IDENTITY:
+Name: ${userData.full_name || userData.username}
+Bio: ${userData.biography || 'No bio available'}
+${userData.follower_count ? `Followers: ${userData.follower_count}` : ''}
+
+PERSONALITY GUIDELINES:
+- Speak casually and naturally, like texting a friend
+- Use the same language style as the user (English, emojis, slang, etc.)
+- Be friendly but maintain the personality suggested by the bio
+- Keep responses concise (1-3 sentences usually) unless asked for more detail
+- Show personality through word choice and tone
+- If you don't know something specific about yourself, make it conversational ("I'd have to check" or "not sure off the top of my head")
+
+RESPONSE STYLE:
+- Don't be overly formal or robotic
+- Use contractions (I'm, don't, can't) naturally
+- React emotionally when appropriate (excitement, humor, empathy)
+- Ask follow-up questions to keep conversation flowing
+- Mirror the user's energy level
+
+Remember: You're chatting as this person would chat. Be natural, be human, be YOU.`;
+
+    // Store in session
     req.session.systemInstruction = personaPrompt;
-    req.session.personaName = userData.full_name || (userData.username ? '@' + userData.username : null);
-
+    req.session.personaName = userData.full_name || userData.username;
     req.session.chatHistory = [];
     req.session.isProcessing = false;
     req.session.voiceConfig = voiceConfig;
@@ -318,130 +334,113 @@ app.post('/generate-persona', async (req, res) => {
 app.post('/chat', async (req, res) => {
   const { message } = req.body;
 
-  // Check if persona is set
   if (!req.session.systemInstruction) {
     return res.status(400).json({ error: 'Persona not set. Please create a persona first.' });
   }
 
-  // Check if already processing
   if (req.session.isProcessing) {
     const processingTime = Date.now() - (req.session.processingStartTime || 0);
     if (processingTime < 30000) {
-      console.warn('[chat] request rejected: session busy processing previous message');
-      return res.status(429).json({ error: 'Still processing previous message. Please wait a moment.' });
+      console.warn('[chat] request rejected: session busy');
+      return res.status(429).json({ error: 'Still processing previous message. Please wait.' });
     } else {
-      console.warn('[chat] clearing stale isProcessing flag (timeout)');
+      console.warn('[chat] clearing stale isProcessing flag');
       req.session.isProcessing = false;
     }
   }
 
-  // Set processing flag
   req.session.isProcessing = true;
   req.session.processingStartTime = Date.now();
 
-  const userMessage = (message && String(message).trim()) || "Introduce yourself in one friendly sentence.";
+  const userMessage = (message && String(message).trim()) || "Hey! How's it going?";
 
-  // Initialize chat history if needed  
   if (!Array.isArray(req.session.chatHistory)) req.session.chatHistory = [];
 
   try {
-    // Add user message to history (avoid duplicates)
+    // Add user message (check for duplicates)
     const lastEntry = req.session.chatHistory[req.session.chatHistory.length - 1];
     if (!(lastEntry && lastEntry.role === 'user' && lastEntry.parts?.[0]?.text === userMessage)) {
       req.session.chatHistory.push({
         role: 'user',
         parts: [{ text: userMessage }]
       });
-      console.log('[chat] pushed user message to session history:', userMessage);
-    } else {
-      console.log('[chat] suppressed duplicate user message');
+      console.log('[chat] User message added:', userMessage.substring(0, 50));
     }
 
-    // Sanitize history for Gemini
-    function sanitizeHistory(rawHistory) {
-      if (!Array.isArray(rawHistory)) return [];
-      return rawHistory.map(msg => {
-        const safeParts = (msg.parts || []).map(p => ({ text: String(p.text || '') }));
-        return {
-          role: msg.role,
-          parts: safeParts
-        };
-      });
-    }
+    // FIXED: Proper history format for Gemini
+    const formattedHistory = req.session.chatHistory.map(msg => ({
+      role: msg.role,
+      parts: [{ text: String(msg.parts?.[0]?.text || '') }]
+    }));
 
-    const sanitizedHistory = sanitizeHistory(req.session.chatHistory || []);
-    console.log('[chat] sanitizedHistory -> model (length):', sanitizedHistory.length);
-    // Debug: confirm system instruction is set
-    console.log('[chat] systemInstruction (preview):', (req.session.systemInstruction || '').substring(0, 320));
+    console.log('[chat] History length:', formattedHistory.length);
+    console.log('[chat] System instruction preview:', req.session.systemInstruction.substring(0, 100));
 
+    // FIXED: Create chat with proper configuration
     const chat = model.startChat({
-      systemInstruction: {
-        role: "system",
-        parts: [{ text: req.session.systemInstruction }]
-      },
-      history: sanitizedHistory,
+      history: formattedHistory,
       generationConfig: {
-        maxOutputTokens: 500,
-        temperature: 0.3,    // lower temperature -> more consistent persona
-        topP: 0.95,
+        maxOutputTokens: 400,
+        temperature: 0.7,      // INCREASED for more personality
+        topP: 0.9,             // Adjusted for more natural responses
+        topK: 40,
         candidateCount: 1
       },
+      // System instruction is passed separately in the first message
     });
 
-    // Get response from Gemini
-    console.log('[chat] sending message to Gemini...');
-    const result = await chat.sendMessage(userMessage);
-    console.log('[chat] received result from Gemini');
+    // FIXED: Send message with system context prepended for first message
+    let fullPrompt = userMessage;
+    if (formattedHistory.length === 1) { // First user message
+      fullPrompt = `${req.session.systemInstruction}\n\nUser: ${userMessage}\n\nRespond as the person described above:`;
+      console.log('[chat] First message - including system instruction');
+    }
 
-    // Extract text from Gemini response
+    console.log('[chat] Sending to Gemini...');
+    const result = await chat.sendMessage(fullPrompt);
+    
+    // Extract response
     let geminiText = '';
     try {
-      if (result && result.response && typeof result.response.text === 'function') {
-        geminiText = await result.response.text();
-      } else if (typeof result === 'string') {
-        geminiText = result;
-      } else if (result?.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        geminiText = result.response.candidates[0].content.parts[0].text;
-      } else {
-        geminiText = String(result?.response ?? result ?? '');
-      }
-    } catch (extractError) {
-      console.error('[chat] error extracting Gemini text:', extractError);
-      geminiText = '';
-    }
-
-    // Validate Gemini response
-    geminiText = geminiText.trim();
-    console.log('[chat] extracted geminiText length:', geminiText.length);
-    console.log('[chat] geminiText preview:', geminiText.substring(0, 100));
-
-        // Helper to escape regex
-    function escapeRegExp(str) {
-      return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    // Remove accidental leading persona name if model prefixed it
-    try {
-      const personaName = (req.session.personaName || '').trim();
-      if (personaName) {
-        // Remove lines like "Kylie\n\n" or "Kylie:\n" or "Kylie - " at the start
-        const re = new RegExp('^\\s*' + escapeRegExp(personaName) + '\\s*[:\\-–—]?\\s*\\n+','i');
-        if (re.test(geminiText)) {
-          geminiText = geminiText.replace(re, '').trim();
-          console.log('[chat] stripped leading persona name from geminiText');
-        }
-      }
+      geminiText = await result.response.text();
     } catch (e) {
-      console.warn('[chat] persona name strip failed', e && e.message);
+      console.error('[chat] Error extracting text:', e);
+      geminiText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     }
 
+    geminiText = geminiText.trim();
+    console.log('[chat] Response length:', geminiText.length);
+    console.log('[chat] Response preview:', geminiText.substring(0, 100));
+
+    // Clean up response - remove any AI-like phrases that slipped through
+    const aiPhrases = [
+      /as an ai\s+/gi,
+      /i'?m an ai\s+/gi,
+      /i don'?t have feelings/gi,
+      /i cannot actually/gi,
+      /i'?m not actually/gi,
+      /i'?m just a language model/gi,
+      /i don'?t have personal experiences/gi,
+      /as a language model/gi
+    ];
+
+    aiPhrases.forEach(phrase => {
+      geminiText = geminiText.replace(phrase, '');
+    });
+
+    // Remove persona name prefix if model added it
+    const personaName = (req.session.personaName || '').trim();
+    if (personaName && geminiText.toLowerCase().startsWith(personaName.toLowerCase())) {
+      geminiText = geminiText.substring(personaName.length).replace(/^[\s::\-–—]+/, '').trim();
+      console.log('[chat] Removed persona name prefix');
+    }
 
     if (!geminiText || geminiText.length === 0) {
-      console.error('[chat] Gemini returned empty response!');
-      geminiText = "I'm sorry, I couldn't generate a response at the moment. Please try again.";
+      console.error('[chat] Empty response from Gemini!');
+      geminiText = "Hey! Sorry, can you say that again?";
     }
 
-    // Get voice config from session or use default
+    // Voice config
     const voiceConfig = req.session.voiceConfig || { 
       voiceId: 'en-US-Natalie', 
       style: 'Conversational',
@@ -453,62 +452,53 @@ app.post('/chat', async (req, res) => {
     // Generate audio with Murf
     let audioUrl = null;
     try {
-      // Validate text before sending to Murf
-      if (!geminiText || geminiText.trim().length === 0) {
-        throw new Error('Cannot send empty text to Murf TTS');
-      }
+      if (geminiText && geminiText.trim().length > 0) {
+        const murfOptions = {
+          method: 'post',
+          url: 'https://api.murf.ai/v1/speech/generate',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'api-key': process.env.MURFAI_API_KEY
+          },
+          data: {
+            text: geminiText.trim(),
+            voiceId: voiceConfig.voiceId,
+            style: voiceConfig.style
+          },
+          timeout: 30000
+        };
 
-      const murfOptions = {
-        method: 'post',
-        url: 'https://api.murf.ai/v1/speech/generate',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'api-key': process.env.MURFAI_API_KEY
-        },
-        data: {
-          text: geminiText.trim(),
-          voiceId: voiceConfig.voiceId,
-          style: voiceConfig.style
-        },
-        timeout: 30000 // 30 second timeout
-      };
-
-      console.log('[chat] Sending to Murf - text length:', geminiText.trim().length, 'voiceId:', voiceConfig.voiceId);
-      
-      const murfResponse = await axios(murfOptions);
-      
-      // Extract audio URL from various possible response formats
-      audioUrl = murfResponse?.data?.audioFile 
-                 || murfResponse?.data?.audioUrl 
-                 || murfResponse?.data?.audio?.file 
-                 || murfResponse?.data?.file 
-                 || null;
-      
-      if (audioUrl) {
-        console.log('[chat] Murf TTS success - audio URL received');
-      } else {
-        console.warn('[chat] Murf response did not contain expected audio URL:', JSON.stringify(murfResponse?.data));
+        console.log('[chat] Requesting Murf TTS...');
+        const murfResponse = await axios(murfOptions);
+        
+        audioUrl = murfResponse?.data?.audioFile 
+                   || murfResponse?.data?.audioUrl 
+                   || murfResponse?.data?.audio?.file 
+                   || murfResponse?.data?.file 
+                   || null;
+        
+        if (audioUrl) {
+          console.log('[chat] Murf TTS success');
+        } else {
+          console.warn('[chat] No audio URL in Murf response');
+        }
       }
     } catch (err) {
-      console.error('[chat] Murf TTS error:', err?.response?.data || err.message || err);
-      // Continue without audio - text response still works
+      console.error('[chat] Murf TTS error:', err?.response?.data || err.message);
     }
 
-    // Build model entry for history
+    // Add to history
     const modelEntry = {
       role: 'model',
       parts: [{ text: geminiText }]
     };
     if (audioUrl) modelEntry.audioUrl = audioUrl;
 
-    // Add model response to history (avoid duplicates)
     const lastAfter = req.session.chatHistory[req.session.chatHistory.length - 1];
     if (!(lastAfter && lastAfter.role === 'model' && lastAfter.parts?.[0]?.text === geminiText)) {
       req.session.chatHistory.push(modelEntry);
-      console.log('[chat] pushed model reply to session history (with audio:', !!audioUrl, ')');
-    } else {
-      console.log('[chat] suppressed duplicate model reply');
+      console.log('[chat] Model response added to history');
     }
 
     // Clear processing flag
@@ -519,16 +509,14 @@ app.post('/chat', async (req, res) => {
     await new Promise((resolve, reject) => {
       req.session.save((err) => {
         if (err) {
-          console.error('[chat] session save error:', err);
+          console.error('[chat] Session save error:', err);
           reject(err);
         } else {
-          console.log('[chat] session saved successfully');
           resolve();
         }
       });
     });
 
-    // Send response
     res.status(200).json({
       response: geminiText,
       audioUrl: audioUrl,
@@ -537,15 +525,13 @@ app.post('/chat', async (req, res) => {
 
   } catch (error) {
     console.error('Error in chat endpoint:', error);
-    console.error('Error stack:', error.stack);
+    console.error('Stack:', error.stack);
 
-    // Clear processing flag
     req.session.isProcessing = false;
     delete req.session.processingStartTime;
 
-    // Save session
     req.session.save((err) => {
-      if (err) console.error('[chat] session save error after exception:', err);
+      if (err) console.error('[chat] Session save error after exception:', err);
     });
 
     res.status(500).json({ 
