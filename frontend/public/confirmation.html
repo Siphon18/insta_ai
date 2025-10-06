@@ -179,19 +179,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (res.ok) {
         // success: server attached persona to session — go to chat
-        window.location.href = '/';
+        window.location.href = '/chat';
       } else {
         // server returned error JSON or HTML (fallback)
         console.warn('Server responded with non-OK status for /generate-persona', res.status);
         // Save locally for debugging and still proceed to chat (so user flow isn't blocked)
         localStorage.setItem('personaDataServerSaved', JSON.stringify(persona));
-        window.location.href = '/';
+        window.location.href = '/chat';
       }
     } catch (err) {
       console.error('Network error calling /generate-persona', err);
       // fallback: still proceed but mark that server call failed
       localStorage.setItem('personaDataServerSaved', JSON.stringify(persona));
-      window.location.href = '/';
+      window.location.href = '/chat';
     }
   });
 });
