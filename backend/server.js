@@ -30,10 +30,9 @@ const voices = {
 };
 
 app.use(express.json());
-app.use(express.json());
 app.use(cors()); // Add this line
 // CORRECTED LINE: Points to the public folder inside the frontend directory
-app.use(express.static(path.join(__dirname, '../frontend/public')));
+app.use(express.static(path.join(__dirname, '../frontend/public'), { index: false }));
 
 
 app.use(session({
