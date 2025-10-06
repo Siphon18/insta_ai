@@ -164,7 +164,7 @@ app.get('/api/image-proxy', async (req, res) => {
 
   const hostAllowed = hostname => allowedImageHosts.some(f => hostname.includes(f));
 
-  const isInstagramPostPage = parsed.hostname.includes('instagram.com') && /^\/p\/|^\/tv\/|^\/reel\//.test(parsed.pathname);
+  const isInstagramPostPage = parsed.hostname.includes('instagram.com') && /^\/p\/|^\/tv\/|^\/reel\a//.test(parsed.pathname);
 
   try {
     let finalImageUrl = null;
@@ -503,6 +503,10 @@ app.get('/debug-session', (req, res) => {
     voiceConfig: req.session.voiceConfig || null,
     chatHistory: req.session.chatHistory || []
   });
+});
+
+app.get('/index.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/public', 'index.html'));
 });
 
 // Serve the main chat page for the root URL
