@@ -315,10 +315,12 @@ app.post('/generate-persona', async (req, res) => {
 app.post('/chat', async (req, res) => {
   const { message } = req.body;
 
+  // Check if persona is set
   if (!req.session.systemInstruction) {
     return res.status(400).json({ error: 'Persona not set. Please create a persona first.' });
   }
 
+  // Check if already processing
   if (req.session.isProcessing) {
     const processingTime = Date.now() - (req.session.processingStartTime || 0);
     if (processingTime < 30000) {
@@ -330,14 +332,17 @@ app.post('/chat', async (req, res) => {
     }
   }
 
+  // Set processing flag
   req.session.isProcessing = true;
   req.session.processingStartTime = Date.now();
 
   const userMessage = (message && String(message).trim()) || "Introduce yourself in one friendly sentence.";
 
+  // Initialize chat history if needed
   if (!Array.isArray(req.session.chatHistory)) req.session.chatHistory = [];
 
   try {
+    // Add user message to history (avoid duplicates)
     const lastEntry = req.session.chatHistory[req.session.chatHistory.length - 1];
     if (!(lastEntry && lastEntry.role === 'user' && lastEntry.parts?.[0]?.text === userMessage)) {
       req.session.chatHistory.push({
@@ -349,6 +354,7 @@ app.post('/chat', async (req, res) => {
       console.log('[chat] suppressed duplicate user message');
     }
 
+    // Sanitize history for Gemini
     function sanitizeHistory(rawHistory) {
       if (!Array.isArray(rawHistory)) return [];
       return rawHistory.map(msg => {
@@ -361,9 +367,9 @@ app.post('/chat', async (req, res) => {
     }
 
     const sanitizedHistory = sanitizeHistory(req.session.chatHistory || []);
-
     console.log('[chat] sanitizedHistory -> model (length):', sanitizedHistory.length);
 
+    // Create chat with Gemini
     const chat = model.startChat({
       systemInstruction: {
         role: "system",
@@ -375,18 +381,39 @@ app.post('/chat', async (req, res) => {
       },
     });
 
+    // Get response from Gemini
+    console.log('[chat] sending message to Gemini...');
     const result = await chat.sendMessage(userMessage);
+    console.log('[chat] received result from Gemini');
 
-    let geminiText;
-    if (result && result.response && typeof result.response.text === 'function') {
-      geminiText = await result.response.text();
-    } else if (typeof result === 'string') {
-      geminiText = result;
-    } else {
-      geminiText = String(result?.response ?? result ?? '');
+    // Extract text from Gemini response
+    let geminiText = '';
+    try {
+      if (result && result.response && typeof result.response.text === 'function') {
+        geminiText = await result.response.text();
+      } else if (typeof result === 'string') {
+        geminiText = result;
+      } else if (result?.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        geminiText = result.response.candidates[0].content.parts[0].text;
+      } else {
+        geminiText = String(result?.response ?? result ?? '');
+      }
+    } catch (extractError) {
+      console.error('[chat] error extracting Gemini text:', extractError);
+      geminiText = '';
     }
 
-    // Use the voice config from session, or fallback to default female voice
+    // Validate Gemini response
+    geminiText = geminiText.trim();
+    console.log('[chat] extracted geminiText length:', geminiText.length);
+    console.log('[chat] geminiText preview:', geminiText.substring(0, 100));
+
+    if (!geminiText || geminiText.length === 0) {
+      console.error('[chat] Gemini returned empty response!');
+      geminiText = "I'm sorry, I couldn't generate a response at the moment. Please try again.";
+    }
+
+    // Get voice config from session or use default
     const voiceConfig = req.session.voiceConfig || { 
       voiceId: 'en-US-Natalie', 
       style: 'Conversational',
@@ -395,49 +422,72 @@ app.post('/chat', async (req, res) => {
 
     console.log(`[chat] Using voice: ${voiceConfig.voiceId}`);
 
-    const murfOptions = {
-      method: 'post',
-      url: 'https://api.murf.ai/v1/speech/generate',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'api-key': process.env.MURFAI_API_KEY
-      },
-      data: {
-        text: geminiText,
-        voiceId: voiceConfig.voiceId,
-        style: voiceConfig.style
-      }
-    };
-
+    // Generate audio with Murf
     let audioUrl = null;
     try {
+      // Validate text before sending to Murf
+      if (!geminiText || geminiText.trim().length === 0) {
+        throw new Error('Cannot send empty text to Murf TTS');
+      }
+
+      const murfOptions = {
+        method: 'post',
+        url: 'https://api.murf.ai/v1/speech/generate',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'api-key': process.env.MURFAI_API_KEY
+        },
+        data: {
+          text: geminiText.trim(),
+          voiceId: voiceConfig.voiceId,
+          style: voiceConfig.style
+        },
+        timeout: 30000 // 30 second timeout
+      };
+
+      console.log('[chat] Sending to Murf - text length:', geminiText.trim().length, 'voiceId:', voiceConfig.voiceId);
+      
       const murfResponse = await axios(murfOptions);
-      audioUrl = murfResponse?.data?.audioFile || murfResponse?.data?.audioUrl || murfResponse?.data?.audio?.file || murfResponse?.data?.file || null;
-      if (!audioUrl) {
-        console.warn('[chat] Murf response did not contain expected audio URL:', murfResponse?.data);
+      
+      // Extract audio URL from various possible response formats
+      audioUrl = murfResponse?.data?.audioFile 
+                 || murfResponse?.data?.audioUrl 
+                 || murfResponse?.data?.audio?.file 
+                 || murfResponse?.data?.file 
+                 || null;
+      
+      if (audioUrl) {
+        console.log('[chat] Murf TTS success - audio URL received');
+      } else {
+        console.warn('[chat] Murf response did not contain expected audio URL:', JSON.stringify(murfResponse?.data));
       }
     } catch (err) {
       console.error('[chat] Murf TTS error:', err?.response?.data || err.message || err);
+      // Continue without audio - text response still works
     }
 
+    // Build model entry for history
     const modelEntry = {
       role: 'model',
       parts: [{ text: geminiText }]
     };
     if (audioUrl) modelEntry.audioUrl = audioUrl;
 
+    // Add model response to history (avoid duplicates)
     const lastAfter = req.session.chatHistory[req.session.chatHistory.length - 1];
     if (!(lastAfter && lastAfter.role === 'model' && lastAfter.parts?.[0]?.text === geminiText)) {
       req.session.chatHistory.push(modelEntry);
-      console.log('[chat] pushed model reply to session history (with audio if available)');
+      console.log('[chat] pushed model reply to session history (with audio:', !!audioUrl, ')');
     } else {
       console.log('[chat] suppressed duplicate model reply');
     }
 
+    // Clear processing flag
     req.session.isProcessing = false;
     delete req.session.processingStartTime;
 
+    // Save session
     await new Promise((resolve, reject) => {
       req.session.save((err) => {
         if (err) {
@@ -450,6 +500,7 @@ app.post('/chat', async (req, res) => {
       });
     });
 
+    // Send response
     res.status(200).json({
       response: geminiText,
       audioUrl: audioUrl,
@@ -457,16 +508,22 @@ app.post('/chat', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error in chat endpoint:', error.response ? error.response.data : error.message);
+    console.error('Error in chat endpoint:', error);
+    console.error('Error stack:', error.stack);
 
+    // Clear processing flag
     req.session.isProcessing = false;
     delete req.session.processingStartTime;
 
+    // Save session
     req.session.save((err) => {
       if (err) console.error('[chat] session save error after exception:', err);
     });
 
-    res.status(500).json({ error: 'Failed to get a response from the AI.' });
+    res.status(500).json({ 
+      error: 'Failed to get a response from the AI.',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
