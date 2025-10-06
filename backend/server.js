@@ -470,6 +470,10 @@ app.post('/chat', async (req, res) => {
   }
 });
 
+app.get('/chat', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/public', 'Chat.html'));
+});
+
 app.post('/new-chat', (req, res) => {
   req.session.destroy(err => {
     if (err) {
@@ -510,7 +514,7 @@ app.get('/index.html', (req, res) => {
 
 // Serve the main chat page for the root URL
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/public', 'Chat.html'));
+  res.sendFile(path.join(__dirname, '../frontend/public', 'index.html'));
 });
 
 // Serve the add-username page
