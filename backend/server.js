@@ -4,6 +4,7 @@ const session = require('express-session');
 const path = require('path');
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
@@ -29,6 +30,8 @@ const voices = {
 };
 
 app.use(express.json());
+app.use(express.json());
+app.use(cors()); // Add this line
 // CORRECTED LINE: Points to the public folder inside the frontend directory
 app.use(express.static(path.join(__dirname, '../frontend/public')));
 
