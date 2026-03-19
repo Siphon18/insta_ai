@@ -22,7 +22,18 @@ window.APP_CONFIG = window.APP_CONFIG || {
   }
   window.__API_BASE_URL__ = normalized;
 
-  var prefixes = ['/api/', '/chat', '/generate-persona', '/get-voices', '/audio-proxy', '/healthz', '/readyz'];
+  var prefixes = [
+    '/api/',
+    '/chat',
+    '/generate-persona',
+    '/get-voices',
+    '/get-chat-history',
+    '/instagram-posts',
+    '/audio-proxy',
+    '/image-proxy',
+    '/healthz',
+    '/readyz'
+  ];
   function shouldRewrite(url) {
     if (typeof url !== 'string') return false;
     if (!url.startsWith('/')) return false;

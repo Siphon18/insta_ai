@@ -497,7 +497,7 @@
                 return fetchAndRenderReply(userMessage, _retryCount + 1);
               }
               removeTypingIndicator();
-              addMessage(personaName, data.error || 'I\'m a bit busy right now â€” try again in a minute! ðŸ˜…', false);
+              addMessage(personaName, data.error || 'I am a bit busy right now - try again in a minute.', false);
               return;
             }
             throw new Error(data.error || 'Server error');

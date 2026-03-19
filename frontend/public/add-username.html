@@ -400,7 +400,7 @@
         if (!textEl || !barEl || !resetEl || !usage) return;
 
         const percent = usagePercent(usage.used, usage.limit);
-        textEl.textContent = `${usage.used}/${usage.limit} used â€¢ ${usage.remaining} left`;
+        textEl.textContent = `${usage.used}/${usage.limit} used - ${usage.remaining} left`;
         barEl.style.width = `${percent}%`;
         resetEl.textContent = `Resets: ${formatResetTime(usage.resetAt)}`;
       }
@@ -429,22 +429,30 @@
           if (!response.ok) return;
           const voices = await response.json();
 
+          const prettyLabel = (voice) => {
+            const style = voice.style || 'Conversational';
+            const desc = voice.description || 'Balanced';
+            return `${desc} (${style})`;
+          };
+
           const maleOptgroup = document.createElement('optgroup');
           maleOptgroup.label = 'Male Voices';
-          voices.male.forEach(voice => {
+          voices.male.forEach((voice) => {
             const option = document.createElement('option');
             option.value = voice.voiceId;
-            option.textContent = `${voice.voiceId} (${voice.description})`;
+            option.textContent = prettyLabel(voice);
+            option.title = `ID: ${voice.voiceId}`;
             option.className = 'bg-slate-900';
             maleOptgroup.appendChild(option);
           });
 
           const femaleOptgroup = document.createElement('optgroup');
           femaleOptgroup.label = 'Female Voices';
-          voices.female.forEach(voice => {
+          voices.female.forEach((voice) => {
             const option = document.createElement('option');
             option.value = voice.voiceId;
-            option.textContent = `${voice.voiceId} (${voice.description})`;
+            option.textContent = prettyLabel(voice);
+            option.title = `ID: ${voice.voiceId}`;
             option.className = 'bg-slate-900';
             femaleOptgroup.appendChild(option);
           });
@@ -498,16 +506,16 @@
 
         // Rotating loading messages
         const loadingLines = [
-          { text: 'Stalking their profile... professionally ðŸ•µï¸', icon: 'person_search' },
-          { text: 'Reading their bio like a detective ðŸ”', icon: 'fingerprint' },
-          { text: 'Downloading their entire vibe... ðŸ’«', icon: 'download' },
-          { text: 'Counting their followers (flex check) ðŸ’ª', icon: 'group' },
-          { text: 'Studying their caption game ðŸ“', icon: 'edit_note' },
-          { text: 'Analyzing personality with AI ðŸ§ ', icon: 'psychology' },
-          { text: 'Figuring out if they\'re a morning or night poster ðŸŒ™', icon: 'schedule' },
-          { text: 'Teaching AI to talk like them ðŸŽ­', icon: 'record_voice_over' },
-          { text: 'Almost there... building persona âœ¨', icon: 'auto_awesome' },
-          { text: 'Picking the perfect voice ðŸŽ¤', icon: 'mic' },
+          { text: 'Scanning profile details...', icon: 'person_search' },
+          { text: 'Reading bio and context...', icon: 'fingerprint' },
+          { text: 'Collecting vibe signals...', icon: 'download' },
+          { text: 'Checking follower metrics...', icon: 'group' },
+          { text: 'Studying caption style...', icon: 'edit_note' },
+          { text: 'Analyzing personality with AI...', icon: 'psychology' },
+          { text: 'Estimating posting rhythm...', icon: 'schedule' },
+          { text: 'Calibrating persona tone...', icon: 'record_voice_over' },
+          { text: 'Finalizing persona build...', icon: 'auto_awesome' },
+          { text: 'Selecting the best voice...', icon: 'mic' },
         ];
         let loadingIndex = 0;
         const loadingText = document.getElementById('loading-text');

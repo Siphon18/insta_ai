@@ -111,6 +111,20 @@ async function initDB() {
       ON chat_messages (persona_id, created_at ASC);
     `);
 
+    // Persistent TTS audio store (survives server restarts/deploys)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tts_audio_store (
+        id           VARCHAR(64) PRIMARY KEY,
+        audio_data   BYTEA NOT NULL,
+        content_type VARCHAR(100) NOT NULL DEFAULT 'audio/mpeg',
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS tts_audio_store_created_idx
+      ON tts_audio_store (created_at DESC);
+    `);
+
     // API usage counters (for persistent quota tracking)
     await client.query(`
       CREATE TABLE IF NOT EXISTS api_usage_counters (

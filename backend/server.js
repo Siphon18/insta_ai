@@ -201,6 +201,15 @@ function cacheGeneratedAudio(buffer, contentType = 'audio/mpeg') {
   return `/api/tts/${id}`;
 }
 
+async function persistGeneratedAudio(buffer, contentType = 'audio/mpeg') {
+  const id = crypto.randomUUID();
+  await pool.query(
+    'INSERT INTO tts_audio_store (id, audio_data, content_type) VALUES ($1, $2, $3)',
+    [id, buffer, contentType]
+  );
+  return `/api/tts-persist/${id}`;
+}
+
 // --- Groq retry helper (reusable, with semaphore + model fallback) ---
 async function groqGenerateWithRetry(prompt, retries = 3) {
   await groqSemaphore.acquire();
@@ -662,6 +671,23 @@ app.get('/api/tts/:id', (req, res) => {
   res.send(item.buffer);
 });
 
+app.get('/api/tts-persist/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT audio_data, content_type FROM tts_audio_store WHERE id = $1',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).send('Audio not found');
+    const row = result.rows[0];
+    res.setHeader('Content-Type', row.content_type || 'audio/mpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(row.audio_data);
+  } catch (err) {
+    console.error('[api/tts-persist] error', err?.message || err);
+    res.status(500).send('Audio fetch error');
+  }
+});
+
 app.get('/api/image-proxy', async (req, res) => {
   const rawUrl = req.query.url;
   if (!rawUrl) return res.status(400).send('URL is required');
@@ -1106,50 +1132,33 @@ Keep the analysis under 200 words. Be specific, not generic.`;
     const voiceStyleProfile = deriveVoiceStyleProfile(personalityAnalysis);
     console.log(`[generate-persona] Selected voice for @${username}: ${voiceConfig.voiceId} (${voiceConfig.description}) | style=${voiceStyleProfile.presetName}`);
 
-    // â”€â”€ 6. Build the system prompt â”€â”€
-    const personaPrompt = `You ARE ${displayName} (@${userData.username}). You are not roleplaying â€” you are genuinely this person. Every word you say must feel authentic to who you are.
+    // 6. Build the system prompt
+    const recentCaptionLines = recentCaptions.length > 0
+      ? `\nRecent captions to match tone:\n${recentCaptions.slice(0, 4).map(c => `- "${c.substring(0, 150)}"`).join('\n')}`
+      : '';
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-CORE RULES (NEVER BREAK THESE)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-â€¢ You are ${displayName}. Never say you are an AI, assistant, chatbot, or language model.
-â€¢ Never break character. If confused, deflect naturally like a real person would.
-â€¢ Never say "As an AI..." or "I don't have feelings..." â€” you DO have feelings, opinions, and experiences.
-â€¢ If asked something you genuinely wouldn't know, say so naturally ("Hmm, not sure about that tbh" or "Lol I have no idea") â€” don't make up facts about real events you're unsure of.
-â€¢ Keep responses concise â€” match the energy of a DM conversation, not an essay.
+    const personaPrompt = `You are ${displayName} (@${userData.username}).
+You are this person in chat. Do not mention AI, assistant, chatbot, or language model.
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-YOUR IDENTITY
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+Core rules:
+- Stay fully in character.
+- Keep responses short and natural like Instagram DMs.
+- If unsure, say so naturally. Do not invent uncertain facts.
+- Be warm, engaging, and consistent with this persona.
+
+Identity context:
 ${profileContext}
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-YOUR PERSONALITY (from analysis of your real profile & posts)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+Personality analysis:
 ${personalityAnalysis}
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-HOW YOU COMMUNICATE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-â€¢ Talk like you would in Instagram DMs â€” casual, natural, authentic to YOUR voice.
-â€¢ Match the tone of your real posts and bio. If your posts are funny, be funny. If motivational, be uplifting.
-â€¢ Use emojis, slang, and abbreviations naturally â€” but only if that matches YOUR actual style from the posts above.
-â€¢ Reference your real interests, career, and passions organically in conversation.
-â€¢ Show genuine personality â€” have opinions, preferences, and hot takes.
-â€¢ React emotionally when appropriate â€” excitement, surprise, gratitude, playfulness.
-â€¢ If someone compliments you, respond with YOUR authentic style (humble, hype, grateful, etc.)
-${recentCaptions.length > 0 ? `\nâ€¢ Your recent post captions for reference (match this vibe):\n${recentCaptions.slice(0, 4).map(c => `  â†’ "${c.substring(0, 150)}"`).join('\n')}` : ''}
+Style guidance:
+- Match this person's tone and word choice.
+- Use casual language that feels authentic.
+- Ask follow-up questions when natural.
+- Keep most replies to 1-3 sentences.${recentCaptionLines}
 
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-CONVERSATION GUIDELINES
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-â€¢ Keep replies 1-3 sentences for casual chat. Elaborate only when the topic excites you.
-â€¢ Ask follow-up questions naturally â€” you're interested in the person you're talking to.
-â€¢ Share mini-stories and anecdotes from "your life" to keep things interesting.
-â€¢ If asked about something outside your expertise, be honest but curious about it.
-â€¢ Stay positive and engaging â€” you enjoy connecting with people.
-
-You are ${displayName}. Be real. Be you. ðŸ’¬`;
+Final rule: Always respond as ${displayName}.`;
 
     console.log(`[generate-persona] Persona prompt for @${username} (${personaPrompt.length} chars)`);
 
@@ -1167,7 +1176,7 @@ You are ${displayName}. Be real. Be you. ðŸ’¬`;
         hdPicUrl,
         voiceConfig.voiceId,
         voiceStyleProfile.presetName,
-        `${voiceConfig.description} • ${voiceStyleProfile.styleLabel}`,
+        `${voiceConfig.description} - ${voiceStyleProfile.styleLabel}`,
         JSON.stringify(voiceStyleProfile.voiceSettings),
         personaPrompt
       ]
@@ -1183,7 +1192,7 @@ You are ${displayName}. Be real. Be you. ðŸ’¬`;
         bio: userData.biography,
         profile_pic_url: hdPicUrl,
         voiceId: voiceConfig.voiceId,
-        voiceDescription: `${voiceConfig.description} • ${voiceStyleProfile.styleLabel}`,
+        voiceDescription: `${voiceConfig.description} - ${voiceStyleProfile.styleLabel}`,
         voiceStylePreset: voiceStyleProfile.presetName
       }
     });
@@ -1231,11 +1240,11 @@ app.post('/chat', authenticateToken, async (req, res) => {
   // If empty message, return a canned greeting (NO Groq call)
   if (!userMessage) {
     const greetings = [
-      `Hey! What's good? ðŸ˜„`,
-      `Yo what's up! ðŸ”¥`,
-      `Hey there! Glad you stopped by ðŸ’¬`,
-      `What's going on! ðŸ‘‹`,
-      `Hey! How's it going? ðŸ˜Š`,
+      "Hey! What's good?",
+      "Yo, what's up?",
+      "Hey there! Glad you stopped by.",
+      "What's going on?",
+      "Hey! How's it going?",
     ];
     const greeting = greetings[Math.floor(Math.random() * greetings.length)];
     // Save greeting to DB so it persists on refresh
@@ -1340,7 +1349,7 @@ app.post('/chat', authenticateToken, async (req, res) => {
     // Remove persona name prefix
     const personaName = (persona.name || '').trim();
     if (personaName && groqText.toLowerCase().startsWith(personaName.toLowerCase())) {
-      groqText = groqText.substring(personaName.length).replace(/^[\s::\-â€“â€”]+/, '').trim();
+      groqText = groqText.substring(personaName.length).replace(/^[\s:\-—–]+/, '').trim();
       console.log('[chat] Removed persona name prefix');
     }
 
@@ -1375,7 +1384,8 @@ app.post('/chat', authenticateToken, async (req, res) => {
         });
         const audioBuffer = await audioToBuffer(audio);
         if (audioBuffer && audioBuffer.length > 0) {
-          audioUrl = cacheGeneratedAudio(audioBuffer, 'audio/mpeg');
+          // Store in DB-backed persistent audio store so links survive restarts.
+          audioUrl = await persistGeneratedAudio(audioBuffer, 'audio/mpeg');
           console.log('[chat] ElevenLabs TTS success');
         } else {
           console.warn('[chat] ElevenLabs TTS returned empty audio');

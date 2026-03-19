@@ -10,7 +10,8 @@ const TABLES_IN_ORDER = [
   'users',
   'personas',
   'chat_messages',
-  'api_usage_counters'
+  'api_usage_counters',
+  'tts_audio_store'
 ];
 
 function quoteIdent(name) {
@@ -92,6 +93,19 @@ async function ensureTargetSchema(target) {
       PRIMARY KEY (source, period_type, period_key)
     );
   `);
+
+  await target.query(`
+    CREATE TABLE IF NOT EXISTS tts_audio_store (
+      id           VARCHAR(64) PRIMARY KEY,
+      audio_data   BYTEA NOT NULL,
+      content_type VARCHAR(100) NOT NULL DEFAULT 'audio/mpeg',
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  await target.query(`
+    CREATE INDEX IF NOT EXISTS tts_audio_store_created_idx
+    ON tts_audio_store (created_at DESC);
+  `);
 }
 
 async function getColumns(client, tableName) {
@@ -166,7 +180,7 @@ async function main() {
     await ensureTargetSchema(target);
 
     // Start fresh on target
-    await target.query('TRUNCATE TABLE chat_messages, personas, users, api_usage_counters RESTART IDENTITY CASCADE');
+    await target.query('TRUNCATE TABLE chat_messages, personas, users, api_usage_counters, tts_audio_store RESTART IDENTITY CASCADE');
 
     for (const table of TABLES_IN_ORDER) {
       await copyTable(source, target, table);
