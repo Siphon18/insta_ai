@@ -1,7 +1,7 @@
 // Frontend runtime config for API routing.
 // Set API_BASE_URL to your backend origin when frontend and backend are on different domains.
 window.APP_CONFIG = window.APP_CONFIG || {
-  API_BASE_URL: 'https://insta-ai-backend.onrender.com'
+  API_BASE_URL: 'https://insta-ai.onrender.com'
 };
 
 (function setupApiBaseProxy() {
