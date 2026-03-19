@@ -335,9 +335,16 @@
           audioUrl = data.history[data.history.length - 1]?.audioUrl || null;
         }
         if (audioUrl) {
+          const base = (window.__API_BASE_URL__ || '').trim();
+          const resolveApiUrl = (u) => {
+            if (!u) return u;
+            if (/^https?:\/\//i.test(u)) return u;
+            if (!base) return u;
+            return u.startsWith('/') ? `${base}${u}` : `${base}/${u}`;
+          };
           const proxiedUrl = /^https?:\/\//i.test(audioUrl)
-            ? `/audio-proxy?url=${encodeURIComponent(audioUrl)}`
-            : audioUrl;
+            ? resolveApiUrl(`/audio-proxy?url=${encodeURIComponent(audioUrl)}`)
+            : resolveApiUrl(audioUrl);
           await playAIResponse(proxiedUrl);
         } else {
           updateStatusText("No audio received");

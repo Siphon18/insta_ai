@@ -262,8 +262,12 @@
 
       const personaData = (() => { try { return JSON.parse(localStorage.getItem('personaData')); } catch(e) { return null; } })();
       const personaName = personaData?.name || 'AI Persona';
-      const voiceInfo = personaData?.voiceId ? `${personaData.voiceId}${personaData.voiceDescription ? ' - ' + personaData.voiceDescription : ''}` : null;
+      const voiceInfo = personaData?.voiceDescription || null;
       let aiPersonaPicUrl = localStorage.getItem('aiPersonaPic') || null;
+      if (aiPersonaPicUrl && aiPersonaPicUrl.startsWith('/image-proxy')) {
+        aiPersonaPicUrl = aiPersonaPicUrl.replace('/image-proxy', '/api/image-proxy');
+        localStorage.setItem('aiPersonaPic', aiPersonaPicUrl);
+      }
 
       // Anime avatar for user (persisted per session via localStorage)
       const isFemaleVoice = ['Natalie','Ruby','Daisy'].some(v => (personaData?.voiceId || '').includes(v));
@@ -332,8 +336,18 @@
 
       function proxiedImageUrl(url) {
         if (!url) return url;
-        if (url.startsWith('/api/image-proxy') || url.startsWith('/image-proxy')) return url;
+        if (url.startsWith('/image-proxy')) return url.replace('/image-proxy', '/api/image-proxy');
+        if (url.startsWith('/api/image-proxy')) return url;
         return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+      }
+
+      function resolveApiMediaUrl(url) {
+        if (!url) return url;
+        if (/^https?:\/\//i.test(url)) return url;
+        const base = (window.__API_BASE_URL__ || '').trim();
+        if (!base) return url;
+        if (url.startsWith('/')) return `${base}${url}`;
+        return `${base}/${url}`;
       }
 
       function renderCarousel(images) {
@@ -518,7 +532,8 @@
         if (!bubbleElements) return;
         await typeTextIntoElement(bubbleElements.textElement, replyText);
         if (data.audioUrl) {
-          const audio = new Audio(data.audioUrl);
+          const resolvedAudioUrl = resolveApiMediaUrl(data.audioUrl);
+          const audio = new Audio(resolvedAudioUrl);
           audio.play().catch(err => console.error('Audio play failed:', err));
           const playBtn = document.createElement('button');
           playBtn.className = 'text-gray-500 hover:text-primary transition-colors duration-200';

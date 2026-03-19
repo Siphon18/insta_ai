@@ -775,6 +775,12 @@ app.get('/api/image-proxy', async (req, res) => {
   }
 });
 
+// Backward-compatible alias for older frontend URLs
+app.get('/image-proxy', (req, res) => {
+  const q = new URLSearchParams(req.query || {}).toString();
+  return res.redirect(307, `/api/image-proxy${q ? `?${q}` : ''}`);
+});
+
 
 // ======================== Protected Endpoints ========================
 
