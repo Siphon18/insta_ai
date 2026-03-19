@@ -228,9 +228,16 @@
       const personaData = JSON.parse(localStorage.getItem('personaData'));
       const profilePicElement = document.getElementById('profile-pic');
       const placeholderPic = 'https://via.placeholder.com/150';
+      const apiBase = (window.__API_BASE_URL__ || '').trim();
+      const resolveApiAssetUrl = (url) => {
+        if (!url) return url;
+        if (/^https?:\/\//i.test(url)) return url;
+        if (!apiBase) return url;
+        return url.startsWith('/') ? `${apiBase}${url}` : `${apiBase}/${url}`;
+      };
 
       if (personaData && personaData.profile_pic_url) {
-        const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(personaData.profile_pic_url)}`;
+        const proxyUrl = resolveApiAssetUrl(`/api/image-proxy?url=${encodeURIComponent(personaData.profile_pic_url)}`);
         profilePicElement.src = proxyUrl;
         profilePicElement.alt = `Profile picture of ${personaData.name}`;
         document.getElementById('full-name').textContent = personaData.name;
@@ -306,7 +313,7 @@
           const thumb = document.createElement('div');
           thumb.className = 'post-thumb';
 
-          const proxyImg = `/api/image-proxy?url=${encodeURIComponent(post.image_url)}`;
+          const proxyImg = resolveApiAssetUrl(`/api/image-proxy?url=${encodeURIComponent(post.image_url)}`);
 
           thumb.innerHTML = `
             <img src="${proxyImg}" alt="${post.caption?.substring(0, 60) || 'Instagram post'}" loading="lazy" />

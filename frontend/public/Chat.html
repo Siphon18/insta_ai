@@ -260,6 +260,15 @@
       let currentSlideIndex = 0;
       let totalSlides = 0;
 
+      function resolveApiMediaUrl(url) {
+        if (!url) return url;
+        if (/^https?:\/\//i.test(url)) return url;
+        const base = (window.__API_BASE_URL__ || '').trim();
+        if (!base) return url;
+        if (url.startsWith('/')) return `${base}${url}`;
+        return `${base}/${url}`;
+      }
+
       const personaData = (() => { try { return JSON.parse(localStorage.getItem('personaData')); } catch(e) { return null; } })();
       const personaName = personaData?.name || 'AI Persona';
       const voiceInfo = personaData?.voiceDescription || null;
@@ -268,6 +277,7 @@
         aiPersonaPicUrl = aiPersonaPicUrl.replace('/image-proxy', '/api/image-proxy');
         localStorage.setItem('aiPersonaPic', aiPersonaPicUrl);
       }
+      aiPersonaPicUrl = resolveApiMediaUrl(aiPersonaPicUrl);
 
       // Anime avatar for user (persisted per session via localStorage)
       const isFemaleVoice = ['Natalie','Ruby','Daisy'].some(v => (personaData?.voiceId || '').includes(v));
@@ -316,6 +326,14 @@
 
       async function fetchInstagramPosts(username, limit = DEFAULT_IMAGE_LIMIT) {
         if (!username) return [];
+        const cacheKey = `instaPosts:${username}`;
+        try {
+          const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+          if (cached && Array.isArray(cached.images) && cached.images.length && (Date.now() - Number(cached.ts || 0) < 10 * 60 * 1000)) {
+            setInstaStatus('');
+            return cached.images;
+          }
+        } catch (_) {}
         try {
           setInstaStatus('Loading...');
           const resp = await fetch(`/instagram-posts?username=${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`);
@@ -329,6 +347,9 @@
           const json = await resp.json();
           const posts = Array.isArray(json.posts) ? json.posts : [];
           const images = posts.map(p => p.image_url).filter(Boolean);
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), images }));
+          } catch (_) {}
           setInstaStatus('');
           return images;
         } catch (err) { setInstaStatus('Error'); return []; }
@@ -336,18 +357,9 @@
 
       function proxiedImageUrl(url) {
         if (!url) return url;
-        if (url.startsWith('/image-proxy')) return url.replace('/image-proxy', '/api/image-proxy');
-        if (url.startsWith('/api/image-proxy')) return url;
-        return `/api/image-proxy?url=${encodeURIComponent(url)}`;
-      }
-
-      function resolveApiMediaUrl(url) {
-        if (!url) return url;
-        if (/^https?:\/\//i.test(url)) return url;
-        const base = (window.__API_BASE_URL__ || '').trim();
-        if (!base) return url;
-        if (url.startsWith('/')) return `${base}${url}`;
-        return `${base}/${url}`;
+        if (url.startsWith('/image-proxy')) return resolveApiMediaUrl(url.replace('/image-proxy', '/api/image-proxy'));
+        if (url.startsWith('/api/image-proxy')) return resolveApiMediaUrl(url);
+        return resolveApiMediaUrl(`/api/image-proxy?url=${encodeURIComponent(url)}`);
       }
 
       function renderCarousel(images) {

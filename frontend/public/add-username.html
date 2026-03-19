@@ -372,6 +372,14 @@
       const submitButton = document.getElementById('submit-btn');
       const personaGridWindow = document.getElementById('persona-grid-window');
       const personaGridFade = document.getElementById('persona-grid-fade');
+
+      function resolveApiAssetUrl(url) {
+        if (!url) return url;
+        if (/^https?:\/\//i.test(url)) return url;
+        const base = (window.__API_BASE_URL__ || '').trim();
+        if (!base) return url;
+        return url.startsWith('/') ? `${base}${url}` : `${base}/${url}`;
+      }
       const personaToggleWrap = document.getElementById('persona-toggle-wrap');
       const personaToggleBtn = document.getElementById('persona-toggle-btn');
       const personaToggleIcon = document.getElementById('persona-toggle-icon');
@@ -600,7 +608,9 @@
             const card = document.createElement('div');
             card.className = 'persona-card';
             card.style.animationDelay = `${i * 0.08}s`;
-            const picUrl = p.profile_pic_url ? `/api/image-proxy?url=${encodeURIComponent(p.profile_pic_url)}` : '';
+            const picUrl = p.profile_pic_url
+              ? resolveApiAssetUrl(`/api/image-proxy?url=${encodeURIComponent(p.profile_pic_url)}`)
+              : '';
             card.innerHTML = `
               <div class="flex flex-col items-center text-center gap-2.5">
                 <div class="insta-ring">
@@ -641,7 +651,10 @@
           // Save to localStorage and go to chat
           localStorage.setItem('personaData', JSON.stringify(data.personaDetails));
           if (data.personaDetails.profile_pic_url) {
-            localStorage.setItem('aiPersonaPic', `/api/image-proxy?url=${encodeURIComponent(data.personaDetails.profile_pic_url)}`);
+            localStorage.setItem(
+              'aiPersonaPic',
+              resolveApiAssetUrl(`/api/image-proxy?url=${encodeURIComponent(data.personaDetails.profile_pic_url)}`)
+            );
           }
           window.location.href = '/Chat.html';
         } catch (err) {
