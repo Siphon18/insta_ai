@@ -355,6 +355,25 @@
       }
 
       async function handleServerResponse(data) {
+        const textResponse = String(data?.response || '').trim();
+        const speakWithBrowserTTS = async (text) => {
+          if (!text || !('speechSynthesis' in window)) return false;
+          return await new Promise((resolve) => {
+            try {
+              const utterance = new SpeechSynthesisUtterance(text);
+              utterance.rate = 1.0;
+              utterance.pitch = 1.0;
+              utterance.lang = 'en-US';
+              utterance.onend = () => resolve(true);
+              utterance.onerror = () => resolve(false);
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(utterance);
+            } catch (e) {
+              resolve(false);
+            }
+          });
+        };
+
         let audioUrl = data.audioUrl;
         if (!audioUrl && Array.isArray(data.history) && data.history.length) {
           audioUrl = data.history[data.history.length - 1]?.audioUrl || null;
@@ -370,10 +389,42 @@
           const proxiedUrl = /^https?:\/\//i.test(audioUrl)
             ? resolveApiUrl(`/audio-proxy?url=${encodeURIComponent(audioUrl)}`)
             : resolveApiUrl(audioUrl);
-          await playAIResponse(proxiedUrl);
+          const played = await playAIResponse(proxiedUrl);
+          if (!played) {
+            updateStatusText("Speaking (fallback)...");
+            const spoken = await speakWithBrowserTTS(textResponse);
+            if (!spoken) {
+              updateStatusText("No audio received");
+              stopListening();
+              return;
+            }
+            updateStatusText("Listening...");
+            setTimeout(async () => {
+              try { await startListening(); } catch (_) {
+                updateStatusText("Click the button to speak");
+                talkBtn.disabled = false;
+                talkBtn.classList.add('talk-btn-pulse');
+                talkBtnIcon.textContent = 'mic';
+              }
+            }, 300);
+          }
         } else {
-          updateStatusText("No audio received");
-          stopListening();
+          updateStatusText("Speaking (fallback)...");
+          const spoken = await speakWithBrowserTTS(textResponse);
+          if (!spoken) {
+            updateStatusText("No audio received");
+            stopListening();
+            return;
+          }
+          updateStatusText("Listening...");
+          setTimeout(async () => {
+            try { await startListening(); } catch (_) {
+              updateStatusText("Click the button to speak");
+              talkBtn.disabled = false;
+              talkBtn.classList.add('talk-btn-pulse');
+              talkBtnIcon.textContent = 'mic';
+            }
+          }, 300);
         }
       }
 
@@ -394,13 +445,13 @@
               talkBtnIcon.textContent = 'mic';
             }
           }, 400);
+          return true;
         } catch (err) {
           console.error("Audio error:", err);
-          updateStatusText("Error playing audio.");
-          talkBtn.disabled = false;
-          talkBtn.classList.add('talk-btn-pulse');
-          talkBtnIcon.textContent = 'mic';
-        } finally { sourceNode = null; }
+          return false;
+        } finally {
+          sourceNode = null;
+        }
       }
 
       // Audio visualizer helpers

@@ -549,16 +549,42 @@
         const bubbleElements = createAIMessageBubble();
         if (!bubbleElements) return;
         await typeTextIntoElement(bubbleElements.textElement, replyText);
+        const speakWithBrowserTTS = (text) => {
+          try {
+            if (!text || !('speechSynthesis' in window)) return false;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.lang = 'en-US';
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        };
+
         if (data.audioUrl) {
           const resolvedAudioUrl = resolveApiMediaUrl(data.audioUrl);
           const audio = new Audio(resolvedAudioUrl);
-          audio.play().catch(err => console.error('Audio play failed:', err));
+          audio.play().catch(err => {
+            console.error('Audio play failed:', err);
+            speakWithBrowserTTS(replyText);
+          });
           const playBtn = document.createElement('button');
           playBtn.className = 'text-gray-500 hover:text-primary transition-colors duration-200';
           playBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:14px">volume_up</span>`;
           playBtn.title = 'Play audio';
-          playBtn.onclick = () => { audio.currentTime = 0; audio.play().catch(e => console.error(e)); };
+          playBtn.onclick = () => {
+            audio.currentTime = 0;
+            audio.play().catch(e => {
+              console.error(e);
+              speakWithBrowserTTS(replyText);
+            });
+          };
           bubbleElements.senderInfoContainer.appendChild(playBtn);
+        } else {
+          speakWithBrowserTTS(replyText);
         }
       }
 
