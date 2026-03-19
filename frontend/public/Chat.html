@@ -150,6 +150,12 @@
             <span class="material-symbols-outlined text-base">add</span>
             New Chat
           </button>
+          <button id="logout-btn" type="button"
+            class="text-gray-300 hover:text-white border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 font-medium py-2 px-3 rounded-xl text-sm transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] flex items-center gap-1.5"
+            title="Logout">
+            <span class="material-symbols-outlined text-base">logout</span>
+            <span class="hidden sm:inline">Logout</span>
+          </button>
           <div id="header-user-pic" class="h-9 w-9 rounded-full bg-cover bg-center ring-2 ring-white/10 transition-transform duration-300 hover:scale-110"></div>
         </div>
       </div>
@@ -681,6 +687,7 @@
 
       // Clear chat history (keep persona)
       const clearChatBtn = document.getElementById('clear-chat-btn');
+      const logoutBtn = document.getElementById('logout-btn');
       if (clearChatBtn) clearChatBtn.addEventListener('click', async () => {
         if (!confirm('Clear all messages? The persona will stay.')) return;
         clearChatBtn.disabled = true;
@@ -708,6 +715,7 @@
         localStorage.removeItem('aiPersonaPic');
         window.location.href = '/login.html';
       };
+      if (logoutBtn) logoutBtn.addEventListener('click', logoutHandler);
 
       // auto-load instagram
       (async () => {

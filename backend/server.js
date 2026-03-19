@@ -28,6 +28,7 @@ const RAPIDAPI_GENERATE_LIMIT = Math.max(parseInt(process.env.RAPIDAPI_RATE_LIMI
 const RAPIDAPI_POSTS_LIMIT = Math.max(parseInt(process.env.RAPIDAPI_RATE_LIMIT_POSTS_PER_WINDOW || '6', 10) || 6, 1);
 const RAPIDAPI_DAILY_BUDGET = Math.max(parseInt(process.env.RAPIDAPI_DAILY_BUDGET || '5', 10) || 5, 1);
 const RAPIDAPI_MONTHLY_BUDGET = Math.max(parseInt(process.env.RAPIDAPI_MONTHLY_BUDGET || '145', 10) || 145, 1);
+const INSTAGRAM_CACHE_TTL_MS = Math.max(parseInt(process.env.INSTAGRAM_CACHE_TTL_MS || String(6 * 60 * 60 * 1000), 10) || (6 * 60 * 60 * 1000), 60 * 1000);
 const AUTH_LOGIN_WINDOW_MS = Math.max(parseInt(process.env.AUTH_LOGIN_RATE_WINDOW_MS || '900000', 10) || 900000, 1000);
 const AUTH_LOGIN_LIMIT = Math.max(parseInt(process.env.AUTH_LOGIN_RATE_LIMIT_PER_WINDOW || '8', 10) || 8, 1);
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
@@ -566,54 +567,175 @@ app.get('/get-voices', (req, res) => {
   res.status(200).json(voices);
 });
 
+function normalizeIgUsername(username) {
+  return String(username || '').replace(/^@+/, '').trim().toLowerCase();
+}
+
+function extractPostsFromProfile(profileData, limit = 12) {
+  const edges = (profileData?.edge_owner_to_timeline_media?.edges || []).slice(0, limit);
+  return edges.map(edge => {
+    const node = edge?.node || edge || {};
+    return {
+      id: node.id || node.shortcode || null,
+      image_url: node.display_url || node.thumbnail_src || '',
+      caption: node.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+      like_count: node.edge_liked_by?.count || node.edge_media_preview_like?.count || 0,
+      comment_count: node.edge_media_to_comment?.count || 0,
+      taken_at: node.taken_at_timestamp || 0,
+      media_type: node.is_video ? 2 : 1
+    };
+  }).filter(post => Boolean(post.id || post.image_url));
+}
+
+async function readInstagramCache(username) {
+  const igUsername = normalizeIgUsername(username);
+  const result = await pool.query(
+    `SELECT ig_username, full_name, biography, profile_pic_url, profile_pic_url_hd,
+            profile_payload, posts_payload, fetched_at
+     FROM instagram_profile_cache
+     WHERE ig_username = $1
+     LIMIT 1`,
+    [igUsername]
+  );
+  return result.rows[0] || null;
+}
+
+async function upsertInstagramCache(profileData) {
+  const igUsername = normalizeIgUsername(profileData?.username);
+  if (!igUsername) return;
+  const posts = extractPostsFromProfile(profileData, 50);
+  await pool.query(
+    `INSERT INTO instagram_profile_cache (
+       ig_username, full_name, biography, profile_pic_url, profile_pic_url_hd,
+       profile_payload, posts_payload, fetched_at, updated_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, NOW(), NOW())
+     ON CONFLICT (ig_username)
+     DO UPDATE SET
+       full_name = EXCLUDED.full_name,
+       biography = EXCLUDED.biography,
+       profile_pic_url = EXCLUDED.profile_pic_url,
+       profile_pic_url_hd = EXCLUDED.profile_pic_url_hd,
+       profile_payload = EXCLUDED.profile_payload,
+       posts_payload = EXCLUDED.posts_payload,
+       fetched_at = NOW(),
+       updated_at = NOW()`,
+    [
+      igUsername,
+      profileData?.full_name || null,
+      profileData?.biography || null,
+      profileData?.profile_pic_url || null,
+      profileData?.profile_pic_url_hd || profileData?.profile_pic_url || null,
+      JSON.stringify(profileData || {}),
+      JSON.stringify(posts)
+    ]
+  );
+}
+
+async function fetchInstagramProfileFromRapidApi(username, req, rateLimitKind = 'posts') {
+  const limiter = rateLimitKind === 'generate'
+    ? {
+        prefix: 'rapidapi-generate',
+        limit: RAPIDAPI_GENERATE_LIMIT,
+        windowMs: RAPIDAPI_WINDOW_MS,
+        userScoped: true,
+        message: "Sorry, we're getting a lot of requests right now. Please wait a bit and try generating again."
+      }
+    : {
+        prefix: 'rapidapi-posts',
+        limit: RAPIDAPI_POSTS_LIMIT,
+        windowMs: RAPIDAPI_WINDOW_MS,
+        userScoped: false,
+        message: "Sorry, we've hit the profile fetch limit for now. Please wait a bit and try again."
+      };
+
+  const memoryLimit = checkInMemoryRateLimit(req, limiter);
+  if (!memoryLimit.allowed) {
+    const err = new Error(memoryLimit.message);
+    err.statusCode = 429;
+    err.retryAfterSec = memoryLimit.retryAfterSec;
+    throw err;
+  }
+
+  const budget = await consumeRapidApiBudget();
+  if (!budget.allowed) {
+    const err = new Error(budget.error);
+    err.statusCode = budget.statusCode || 429;
+    err.retryAfterSec = budget.retryAfterSec;
+    throw err;
+  }
+
+  const profileRes = await axios.get('https://instagram-looter2.p.rapidapi.com/profile', {
+    params: { username: normalizeIgUsername(username) },
+    headers: {
+      'x-rapidapi-key': process.env.RAPIDAPI_KEY,
+      'x-rapidapi-host': 'instagram-looter2.p.rapidapi.com'
+    }
+  });
+
+  const profileData = profileRes.data || {};
+  if (!profileData.username) profileData.username = normalizeIgUsername(username);
+  await upsertInstagramCache(profileData);
+  return profileData;
+}
+
+async function getInstagramProfileWithCache(username, req, options = {}) {
+  const { allowStaleOnError = true, cacheTtlMs = INSTAGRAM_CACHE_TTL_MS, rateLimitKind = 'posts' } = options;
+  const igUsername = normalizeIgUsername(username);
+  const cacheRow = await readInstagramCache(igUsername);
+  const now = Date.now();
+
+  if (cacheRow?.profile_payload && cacheRow?.fetched_at) {
+    const ageMs = now - new Date(cacheRow.fetched_at).getTime();
+    if (!Number.isNaN(ageMs) && ageMs <= cacheTtlMs) {
+      return { profileData: cacheRow.profile_payload, source: 'cache', stale: false };
+    }
+  }
+
+  try {
+    const profileData = await fetchInstagramProfileFromRapidApi(igUsername, req, rateLimitKind);
+    return { profileData, source: 'rapidapi', stale: false };
+  } catch (err) {
+    if (allowStaleOnError && cacheRow?.profile_payload) {
+      console.warn(`[instagram-cache] using stale cache for @${igUsername} due to fetch error: ${err.message}`);
+      return { profileData: cacheRow.profile_payload, source: 'cache', stale: true };
+    }
+    throw err;
+  }
+}
+
 
 // ---------- Instagram Posts Endpoint (instagram-looter2) ----------
-app.get('/instagram-posts', rapidApiGlobalBudgetLimiter, rapidApiPostsLimiter, async (req, res) => {
-  const username = req.query.username;
+app.get('/instagram-posts', async (req, res) => {
+  const username = normalizeIgUsername(req.query.username);
   const limit = Math.min(Math.max(parseInt(req.query.limit || '12', 10) || 12, 1), 50);
 
   if (!username) return res.status(400).json({ error: 'Username is required' });
 
   try {
-    console.log(`[instagram-posts] Fetching posts for @${username}`);
-    // /profile returns profile + 12 embedded posts in one call
-    const profileRes = await axios.get('https://instagram-looter2.p.rapidapi.com/profile', {
-      params: { username },
-      headers: {
-        'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-        'x-rapidapi-host': 'instagram-looter2.p.rapidapi.com'
-      }
+    const profileResult = await getInstagramProfileWithCache(username, req, {
+      allowStaleOnError: true,
+      cacheTtlMs: INSTAGRAM_CACHE_TTL_MS,
+      rateLimitKind: 'posts'
     });
-
-    const profileData = profileRes.data;
-    const edges = (profileData.edge_owner_to_timeline_media?.edges || []).slice(0, limit);
-
-    const posts = edges.map(edge => {
-      const node = edge.node || edge;
-      return {
-        id: node.id || node.shortcode,
-        image_url: node.display_url || node.thumbnail_src || '',
-        caption: node.edge_media_to_caption?.edges?.[0]?.node?.text || '',
-        like_count: node.edge_liked_by?.count || node.edge_media_preview_like?.count || 0,
-        comment_count: node.edge_media_to_comment?.count || 0,
-        taken_at: node.taken_at_timestamp || 0,
-        media_type: node.is_video ? 2 : 1
-      };
-    });
+    const profileData = profileResult.profileData || {};
+    const posts = extractPostsFromProfile(profileData, limit);
 
     console.log(`[instagram-posts] Found ${posts.length} posts for @${username}`);
     res.json({
       posts,
       username,
       count: posts.length,
+      cached: profileResult.source === 'cache',
+      stale: profileResult.stale === true,
       ...(posts.length === 0 && { message: `No posts found for @${username}.` })
     });
   } catch (error) {
-    const status = error.response?.status;
+    const status = error.statusCode || error.response?.status;
     console.error(`[instagram-posts] Error for @${username}: ${status || error.message}`);
 
     if (status === 429) {
-      const retryAfterSec = Math.max(parseInt(error.response?.headers?.['retry-after'] || '60', 10) || 60, 1);
+      const retryAfterSec = Math.max(parseInt(error.retryAfterSec || error.response?.headers?.['retry-after'] || '60', 10) || 60, 1);
       return res.status(429).json({
         posts: [],
         username,
@@ -823,7 +945,7 @@ function buildRateLimitKey(prefix, req, userScoped = false) {
   return `${prefix}:ip:${getClientIp(req)}`;
 }
 
-function applyInMemoryRateLimit(req, res, next, options) {
+function checkInMemoryRateLimit(req, options) {
   const { prefix, limit, windowMs, message, userScoped = false } = options;
   const now = Date.now();
   const key = buildRateLimitKey(prefix, req, userScoped);
@@ -831,21 +953,31 @@ function applyInMemoryRateLimit(req, res, next, options) {
 
   if (!current || now >= current.resetAt) {
     rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
-    return next();
+    return { allowed: true };
   }
 
   if (current.count >= limit) {
     const retryAfterSec = Math.max(Math.ceil((current.resetAt - now) / 1000), 1);
-    res.setHeader('Retry-After', String(retryAfterSec));
-    return res.status(429).json({
-      error: message || 'Too many requests. Please wait a moment and try again.',
-      retryAfterSec
-    });
+    return {
+      allowed: false,
+      retryAfterSec,
+      message: message || 'Too many requests. Please wait a moment and try again.'
+    };
   }
 
   current.count += 1;
   rateLimitStore.set(key, current);
-  return next();
+  return { allowed: true };
+}
+
+function applyInMemoryRateLimit(req, res, next, options) {
+  const result = checkInMemoryRateLimit(req, options);
+  if (result.allowed) return next();
+  res.setHeader('Retry-After', String(result.retryAfterSec));
+  return res.status(429).json({
+    error: result.message,
+    retryAfterSec: result.retryAfterSec
+  });
 }
 
 function rapidApiGenerateLimiter(req, res, next) {
@@ -963,7 +1095,7 @@ async function checkAndConsumeUsage(client, options) {
   return { allowed: true };
 }
 
-async function rapidApiGlobalBudgetLimiter(req, res, next) {
+async function consumeRapidApiBudget() {
   const now = new Date();
   const dayPeriod = getUtcDayPeriod(now);
   const monthPeriod = getUtcMonthPeriod(now);
@@ -984,11 +1116,12 @@ async function rapidApiGlobalBudgetLimiter(req, res, next) {
 
     if (!monthly.allowed) {
       await client.query('ROLLBACK');
-      res.setHeader('Retry-After', String(monthly.retryAfterSec));
-      return res.status(429).json({
+      return {
+        allowed: false,
+        statusCode: 429,
         error: "Sorry, we've reached this month's API budget. Please wait until next month.",
         retryAfterSec: monthly.retryAfterSec
-      });
+      };
     }
 
     const daily = await checkAndConsumeUsage(client, {
@@ -1002,45 +1135,57 @@ async function rapidApiGlobalBudgetLimiter(req, res, next) {
 
     if (!daily.allowed) {
       await client.query('ROLLBACK');
-      res.setHeader('Retry-After', String(daily.retryAfterSec));
-      return res.status(429).json({
+      return {
+        allowed: false,
+        statusCode: 429,
         error: "Sorry, we've reached today's API budget. Please try again later.",
         retryAfterSec: daily.retryAfterSec
-      });
+      };
     }
 
     await client.query('COMMIT');
-    return next();
+    return { allowed: true };
   } catch (err) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) {}
     }
-    console.error('[rapidApiGlobalBudgetLimiter] error:', err);
-    return res.status(503).json({
+    console.error('[consumeRapidApiBudget] error:', err);
+    return {
+      allowed: false,
+      statusCode: 503,
       error: "Sorry, we couldn't check API quota right now. Please try again shortly."
-    });
+    };
   } finally {
     if (client) client.release();
   }
 }
 
+async function rapidApiGlobalBudgetLimiter(req, res, next) {
+  const budget = await consumeRapidApiBudget();
+  if (budget.allowed) return next();
+  if (budget.retryAfterSec) {
+    res.setHeader('Retry-After', String(budget.retryAfterSec));
+  }
+  return res.status(budget.statusCode || 429).json({
+    error: budget.error,
+    ...(budget.retryAfterSec ? { retryAfterSec: budget.retryAfterSec } : {})
+  });
+}
+
 
 // ---------- Generate Persona ----------
-app.post('/generate-persona', authenticateToken, rapidApiGlobalBudgetLimiter, rapidApiGenerateLimiter, async (req, res) => {
+app.post('/generate-persona', authenticateToken, async (req, res) => {
   const { username, voiceId } = req.body;
   if (!username) return res.status(400).json({ error: 'Username is required.' });
 
   try {
-    // â”€â”€ 1. Fetch profile info + posts in ONE call (instagram-looter2) â”€â”€
-    const profileRes = await axios.get('https://instagram-looter2.p.rapidapi.com/profile', {
-      params: { username },
-      headers: {
-        'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-        'x-rapidapi-host': 'instagram-looter2.p.rapidapi.com'
-      }
+    // 1. Fetch profile info + posts (DB cache first, RapidAPI on cache miss)
+    const profileResult = await getInstagramProfileWithCache(username, req, {
+      allowStaleOnError: true,
+      cacheTtlMs: INSTAGRAM_CACHE_TTL_MS,
+      rateLimitKind: 'generate'
     });
-
-    const userData = profileRes.data;
+    const userData = profileResult.profileData || {};
     const hdPicUrl = userData.profile_pic_url_hd || userData.profile_pic_url || '';
 
     // â”€â”€ 2. Extract captions from embedded posts (no extra API call!) â”€â”€
@@ -1172,8 +1317,8 @@ Final rule: Always respond as ${displayName}.`;
     await pool.query('UPDATE personas SET is_active = false WHERE user_id = $1', [req.user.id]);
 
     const insertResult = await pool.query(
-      `INSERT INTO personas (user_id, ig_username, name, bio, profile_pic_url, voice_id, voice_style, voice_description, voice_settings, system_instruction)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10) RETURNING id`,
+      `INSERT INTO personas (user_id, ig_username, name, bio, profile_pic_url, voice_id, voice_style, voice_description, voice_settings, posts_snapshot, system_instruction)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11) RETURNING id`,
       [
         req.user.id,
         userData.username,
@@ -1184,6 +1329,7 @@ Final rule: Always respond as ${displayName}.`;
         voiceStyleProfile.presetName,
         `${voiceConfig.description} - ${voiceStyleProfile.styleLabel}`,
         JSON.stringify(voiceStyleProfile.voiceSettings),
+        JSON.stringify(extractPostsFromProfile(userData, 24)),
         personaPrompt
       ]
     );
@@ -1197,6 +1343,7 @@ Final rule: Always respond as ${displayName}.`;
         username: userData.username,
         bio: userData.biography,
         profile_pic_url: hdPicUrl,
+        posts: extractPostsFromProfile(userData, 24),
         voiceId: voiceConfig.voiceId,
         voiceDescription: `${voiceConfig.description} - ${voiceStyleProfile.styleLabel}`,
         voiceStylePreset: voiceStyleProfile.presetName
@@ -1205,10 +1352,10 @@ Final rule: Always respond as ${displayName}.`;
   } catch (error) {
     console.error('Error generating persona:', error.response ? error.response.data : error.message);
 
-    if (error.response?.status === 429) {
-      const retryAfterSec = Math.max(parseInt(error.response?.headers?.['retry-after'] || '60', 10) || 60, 1);
+    if ((error.statusCode || error.response?.status) === 429) {
+      const retryAfterSec = Math.max(parseInt(error.retryAfterSec || error.response?.headers?.['retry-after'] || '60', 10) || 60, 1);
       return res.status(429).json({
-        error: "Sorry, we're temporarily rate-limited while creating personas. Please wait and try again.",
+        error: error.message || "Sorry, we're temporarily rate-limited while creating personas. Please wait and try again.",
         retryAfterSec
       });
     }
@@ -1502,9 +1649,9 @@ app.post('/api/personas/:id/activate', authenticateToken, async (req, res) => {
     } else {
       // Clone persona for this user
       const ins = await pool.query(
-        `INSERT INTO personas (user_id, ig_username, name, bio, profile_pic_url, voice_id, voice_style, voice_description, voice_settings, system_instruction, is_active)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,true) RETURNING id`,
-        [req.user.id, src.ig_username, src.name, src.bio, src.profile_pic_url, src.voice_id, src.voice_style, src.voice_description, JSON.stringify(src.voice_settings || {}), src.system_instruction]
+        `INSERT INTO personas (user_id, ig_username, name, bio, profile_pic_url, voice_id, voice_style, voice_description, voice_settings, posts_snapshot, system_instruction, is_active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,true) RETURNING id`,
+        [req.user.id, src.ig_username, src.name, src.bio, src.profile_pic_url, src.voice_id, src.voice_style, src.voice_description, JSON.stringify(src.voice_settings || {}), JSON.stringify(src.posts_snapshot || []), src.system_instruction]
       );
       activeId = ins.rows[0].id;
     }
@@ -1519,6 +1666,7 @@ app.post('/api/personas/:id/activate', authenticateToken, async (req, res) => {
         username: p.ig_username,
         bio: p.bio,
         profile_pic_url: p.profile_pic_url,
+        posts: Array.isArray(p.posts_snapshot) ? p.posts_snapshot : [],
         voiceId: p.voice_id,
         voiceDescription: p.voice_description
       }

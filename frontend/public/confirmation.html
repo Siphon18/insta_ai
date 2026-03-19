@@ -118,6 +118,11 @@
             <span class="material-symbols-outlined text-primary text-xl">smart_toy</span>
             <h1 class="text-xl font-bold text-white">AI Persona</h1>
           </a>
+          <button id="logout-btn" type="button"
+            class="text-xs sm:text-sm text-gray-300 border border-white/15 bg-white/5 hover:bg-white/10 hover:text-white px-3 py-1.5 rounded-lg transition-all duration-300 inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined" style="font-size:16px">logout</span>
+            Logout
+          </button>
         </div>
       </div>
     </header>
@@ -210,7 +215,15 @@
   </div>
 
   <script>
-    // Auth guard â€” verify token with server
+    function resolveApiAssetUrl(url) {
+      if (!url) return url;
+      if (/^https?:\/\//i.test(url)) return url;
+      const base = (window.__API_BASE_URL__ || '').trim();
+      if (!base) return url;
+      return url.startsWith('/') ? `${base}${url}` : `${base}/${url}`;
+    }
+
+    // Auth guard - verify token with server
     (async () => {
       const token = localStorage.getItem('token');
       if (!token) { window.location.href = '/login.html'; return; }
@@ -227,14 +240,18 @@
     document.addEventListener('DOMContentLoaded', () => {
       const personaData = JSON.parse(localStorage.getItem('personaData'));
       const profilePicElement = document.getElementById('profile-pic');
+      const logoutBtn = document.getElementById('logout-btn');
       const placeholderPic = 'https://via.placeholder.com/150';
-      const apiBase = (window.__API_BASE_URL__ || '').trim();
-      const resolveApiAssetUrl = (url) => {
-        if (!url) return url;
-        if (/^https?:\/\//i.test(url)) return url;
-        if (!apiBase) return url;
-        return url.startsWith('/') ? `${apiBase}${url}` : `${apiBase}/${url}`;
-      };
+
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+          localStorage.removeItem('token');
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('personaData');
+          localStorage.removeItem('aiPersonaPic');
+          window.location.href = '/login.html';
+        });
+      }
 
       if (personaData && personaData.profile_pic_url) {
         const proxyUrl = resolveApiAssetUrl(`/api/image-proxy?url=${encodeURIComponent(personaData.profile_pic_url)}`);
@@ -267,9 +284,9 @@
         window.location.href = '/chat';
       });
 
-      // â”€â”€ Fetch Instagram Posts â”€â”€
+      // Load cached posts first, then fetch only if needed.
       if (personaData && personaData.username) {
-        fetchPosts(personaData.username);
+        fetchPosts(personaData.username, Array.isArray(personaData.posts) ? personaData.posts : []);
       }
     });
 
@@ -279,11 +296,49 @@
       return String(n);
     }
 
-    async function fetchPosts(username) {
+    function renderPosts(posts) {
       const loading = document.getElementById('posts-loading');
       const grid    = document.getElementById('posts-grid');
       const msgBox  = document.getElementById('posts-message');
       const msgText = document.getElementById('posts-message-text');
+      loading.style.display = 'none';
+      grid.innerHTML = '';
+      grid.style.display = 'none';
+      msgBox.classList.add('hidden');
+      msgText.textContent = '';
+
+      if (!Array.isArray(posts) || posts.length === 0) {
+        msgBox.classList.remove('hidden');
+        msgText.textContent = 'No posts available for this profile.';
+        return;
+      }
+
+      posts.forEach(post => {
+        const thumb = document.createElement('div');
+        thumb.className = 'post-thumb';
+        const proxyImg = resolveApiAssetUrl(`/api/image-proxy?url=${encodeURIComponent(post.image_url)}`);
+
+        thumb.innerHTML = `
+          <img src="${proxyImg}" alt="${post.caption?.substring(0, 60) || 'Instagram post'}" loading="lazy" />
+          <div class="post-overlay">
+            <span class="post-stat"><span class="material-symbols-outlined" style="font-size:16px">favorite</span> ${formatCount(post.like_count || 0)}</span>
+            <span class="post-stat"><span class="material-symbols-outlined" style="font-size:16px">chat_bubble</span> ${formatCount(post.comment_count || 0)}</span>
+          </div>`;
+        grid.appendChild(thumb);
+      });
+
+      grid.style.display = 'grid';
+    }
+
+    async function fetchPosts(username, seedPosts = []) {
+      const loading = document.getElementById('posts-loading');
+      const msgBox  = document.getElementById('posts-message');
+      const msgText = document.getElementById('posts-message-text');
+
+      if (Array.isArray(seedPosts) && seedPosts.length > 0) {
+        renderPosts(seedPosts.slice(0, 12));
+        return;
+      }
 
       try {
         const res = await fetch(`/instagram-posts?username=${encodeURIComponent(username)}&limit=12`);
@@ -308,23 +363,12 @@
           return;
         }
 
-        // Render posts
-        data.posts.forEach(post => {
-          const thumb = document.createElement('div');
-          thumb.className = 'post-thumb';
-
-          const proxyImg = resolveApiAssetUrl(`/api/image-proxy?url=${encodeURIComponent(post.image_url)}`);
-
-          thumb.innerHTML = `
-            <img src="${proxyImg}" alt="${post.caption?.substring(0, 60) || 'Instagram post'}" loading="lazy" />
-            <div class="post-overlay">
-              <span class="post-stat"><span class="material-symbols-outlined" style="font-size:16px">favorite</span> ${formatCount(post.like_count)}</span>
-              <span class="post-stat"><span class="material-symbols-outlined" style="font-size:16px">chat_bubble</span> ${formatCount(post.comment_count)}</span>
-            </div>`;
-          grid.appendChild(thumb);
-        });
-
-        grid.style.display = 'grid';
+        renderPosts(data.posts);
+        try {
+          const cachedPersona = JSON.parse(localStorage.getItem('personaData') || '{}');
+          cachedPersona.posts = data.posts;
+          localStorage.setItem('personaData', JSON.stringify(cachedPersona));
+        } catch (_) {}
       } catch (err) {
         console.error('Failed to load posts:', err);
         loading.style.display = 'none';

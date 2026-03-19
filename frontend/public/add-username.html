@@ -179,6 +179,11 @@
             <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors duration-300" href="/">Home</a>
             <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors duration-300" href="/">About</a>
           </nav>
+          <button id="logout-btn" type="button"
+            class="text-xs sm:text-sm text-gray-300 border border-white/15 bg-white/5 hover:bg-white/10 hover:text-white px-3 py-1.5 rounded-lg transition-all duration-300 inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined" style="font-size:16px">logout</span>
+            Logout
+          </button>
         </div>
       </div>
     </header>
@@ -384,6 +389,7 @@
       const personaToggleBtn = document.getElementById('persona-toggle-btn');
       const personaToggleIcon = document.getElementById('persona-toggle-icon');
       const personaToggleLabel = document.getElementById('persona-toggle-label');
+      const logoutBtn = document.getElementById('logout-btn');
       const adminUsageCard = document.getElementById('admin-usage-card');
       const refreshAdminUsageBtn = document.getElementById('refresh-admin-usage');
       const COMPACT_PERSONA_THRESHOLD = 6;
@@ -496,6 +502,16 @@
             ? 'Show less'
             : `Show all personas${hiddenCount ? ` (+${hiddenCount})` : ''}`;
         }
+      }
+
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+          localStorage.removeItem('token');
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('personaData');
+          localStorage.removeItem('aiPersonaPic');
+          window.location.href = '/login.html';
+        });
       }
 
       personaForm.addEventListener('submit', async function (e) {

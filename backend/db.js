@@ -53,6 +53,7 @@ async function initDB() {
         voice_style        VARCHAR(100),
         voice_description  VARCHAR(255),
         voice_settings     JSONB,
+        posts_snapshot     JSONB,
         system_instruction TEXT NOT NULL,
         is_active          BOOLEAN DEFAULT TRUE,
         created_at         TIMESTAMPTZ DEFAULT NOW()
@@ -65,6 +66,9 @@ async function initDB() {
     `);
     await client.query(`
       ALTER TABLE personas ADD COLUMN IF NOT EXISTS voice_settings JSONB;
+    `);
+    await client.query(`
+      ALTER TABLE personas ADD COLUMN IF NOT EXISTS posts_snapshot JSONB;
     `);
 
     // Normalize existing data so only latest active persona per user remains active
@@ -92,6 +96,25 @@ async function initDB() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS personas_user_created_idx
       ON personas (user_id, created_at DESC);
+    `);
+
+    // Instagram profile/posts cache to reduce RapidAPI calls
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS instagram_profile_cache (
+        ig_username        VARCHAR(255) PRIMARY KEY,
+        full_name          VARCHAR(255),
+        biography          TEXT,
+        profile_pic_url    TEXT,
+        profile_pic_url_hd TEXT,
+        profile_payload    JSONB NOT NULL,
+        posts_payload      JSONB NOT NULL DEFAULT '[]'::jsonb,
+        fetched_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at         TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS instagram_profile_cache_fetched_idx
+      ON instagram_profile_cache (fetched_at DESC);
     `);
 
     // Chat messages

@@ -79,11 +79,18 @@
     <!-- Header -->
     <header class="w-full flex justify-between items-center animate-fade-in-up" style="animation-delay:.2s;">
       <div id="persona-header" class="flex items-center gap-3 transition-transform duration-300 hover:scale-105 cursor-default"></div>
-      <a href="/Chat.html"
-        class="glass-btn hover:bg-white/10 text-white font-semibold py-2 px-4 rounded-xl flex items-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95">
-        <span class="material-symbols-outlined text-base">sms</span>
-        <span class="hidden sm:inline">Text Chat</span>
-      </a>
+      <div class="flex items-center gap-2">
+        <a href="/Chat.html"
+          class="glass-btn hover:bg-white/10 text-white font-semibold py-2 px-4 rounded-xl flex items-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95">
+          <span class="material-symbols-outlined text-base">sms</span>
+          <span class="hidden sm:inline">Text Chat</span>
+        </a>
+        <button id="logout-btn" type="button"
+          class="glass-btn hover:bg-white/10 text-white font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all duration-300 hover:scale-105 active:scale-95">
+          <span class="material-symbols-outlined text-base">logout</span>
+          <span class="hidden sm:inline">Logout</span>
+        </button>
+      </div>
     </header>
 
     <!-- Status -->
@@ -132,10 +139,18 @@
     })();
 
     document.addEventListener('DOMContentLoaded', () => {
+      const resolveApiAssetUrl = (url) => {
+        if (!url) return url;
+        if (/^https?:\/\//i.test(url)) return url;
+        const base = (window.__API_BASE_URL__ || '').trim();
+        if (!base) return url;
+        return url.startsWith('/') ? `${base}${url}` : `${base}/${url}`;
+      };
       const talkBtn = document.getElementById('talk-btn');
       const talkBtnIcon = document.getElementById('talk-btn-icon');
       const statusText = document.getElementById('status-text');
       const personaHeader = document.getElementById('persona-header');
+      const logoutBtn = document.getElementById('logout-btn');
 
       let isRecording = false;
       let isSendingTranscript = false;
@@ -172,13 +187,23 @@
         setTimeout(() => window.location.href = '/add-username.html', 2000);
         return;
       }
-      const aiPersonaPicUrl = localStorage.getItem('aiPersonaPic') || 'https://via.placeholder.com/150';
+      const aiPersonaPicUrl = resolveApiAssetUrl(localStorage.getItem('aiPersonaPic') || 'https://via.placeholder.com/150');
       personaHeader.innerHTML = `
         <div class="insta-ring-sm">
           <div class="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-cover bg-center" style="background-image:url('${aiPersonaPicUrl}')"></div>
         </div>
         <h1 class="text-lg sm:text-xl font-bold text-white">${personaData.name || 'AI Persona'}</h1>
       `;
+
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+          localStorage.removeItem('token');
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('personaData');
+          localStorage.removeItem('aiPersonaPic');
+          window.location.href = '/login.html';
+        });
+      }
 
       function updateStatusText(newText) {
         statusText.style.opacity = '0';

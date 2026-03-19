@@ -9,6 +9,7 @@ const BATCH_SIZE = Math.max(parseInt(process.env.MIGRATION_BATCH_SIZE || '500', 
 const TABLES_IN_ORDER = [
   'users',
   'personas',
+  'instagram_profile_cache',
   'chat_messages',
   'api_usage_counters',
   'tts_audio_store'
@@ -49,6 +50,7 @@ async function ensureTargetSchema(target) {
       voice_style        VARCHAR(100),
       voice_description  VARCHAR(255),
       voice_settings     JSONB,
+      posts_snapshot     JSONB,
       system_instruction TEXT NOT NULL,
       is_active          BOOLEAN DEFAULT TRUE,
       created_at         TIMESTAMPTZ DEFAULT NOW()
@@ -56,6 +58,7 @@ async function ensureTargetSchema(target) {
   `);
   await target.query(`ALTER TABLE personas ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;`);
   await target.query(`ALTER TABLE personas ADD COLUMN IF NOT EXISTS voice_settings JSONB;`);
+  await target.query(`ALTER TABLE personas ADD COLUMN IF NOT EXISTS posts_snapshot JSONB;`);
   await target.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS personas_one_active_per_user_idx
     ON personas (user_id)
@@ -64,6 +67,24 @@ async function ensureTargetSchema(target) {
   await target.query(`
     CREATE INDEX IF NOT EXISTS personas_user_created_idx
     ON personas (user_id, created_at DESC);
+  `);
+
+  await target.query(`
+    CREATE TABLE IF NOT EXISTS instagram_profile_cache (
+      ig_username        VARCHAR(255) PRIMARY KEY,
+      full_name          VARCHAR(255),
+      biography          TEXT,
+      profile_pic_url    TEXT,
+      profile_pic_url_hd TEXT,
+      profile_payload    JSONB NOT NULL,
+      posts_payload      JSONB NOT NULL DEFAULT '[]'::jsonb,
+      fetched_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at         TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  await target.query(`
+    CREATE INDEX IF NOT EXISTS instagram_profile_cache_fetched_idx
+    ON instagram_profile_cache (fetched_at DESC);
   `);
 
   await target.query(`
@@ -180,7 +201,7 @@ async function main() {
     await ensureTargetSchema(target);
 
     // Start fresh on target
-    await target.query('TRUNCATE TABLE chat_messages, personas, users, api_usage_counters, tts_audio_store RESTART IDENTITY CASCADE');
+    await target.query('TRUNCATE TABLE chat_messages, personas, users, api_usage_counters, tts_audio_store, instagram_profile_cache RESTART IDENTITY CASCADE');
 
     for (const table of TABLES_IN_ORDER) {
       await copyTable(source, target, table);
