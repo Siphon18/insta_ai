@@ -4,197 +4,326 @@
 <head>
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-  <title>AI Persona Generator</title>
+  <title>AI Persona &mdash; Confirm</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link href="https://fonts.googleapis.com" rel="preconnect" />
   <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
-    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <style>
+    body { font-family: 'Space Grotesk', sans-serif; }
+
+    @keyframes gradient-shift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .animated-gradient-bg {
+      background: linear-gradient(-45deg, #0a0a0a, #1a0a2e, #120a1e, #0d0d0d, #1c0818);
+      background-size: 400% 400%;
+      animation: gradient-shift 18s ease infinite;
+    }
+
+    .orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .2; pointer-events: none; }
+    @keyframes float-1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(40px,-60px) scale(1.15)} }
+    @keyframes float-2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-50px,40px) scale(1.1)} }
+
+    .grid-pattern {
+      background-image: radial-gradient(circle, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 30px 30px;
+    }
+
+    .glass {
+      background: rgba(255,255,255,.04);
+      backdrop-filter: blur(20px) saturate(1.3);
+      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    @keyframes shimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
+    .btn-shimmer {
+      background-size: 200% auto;
+      background-image: linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045, #fd1d1d, #833ab4);
+      animation: shimmer 4s linear infinite;
+    }
+
+    /* Instagram gradient ring around avatar */
+    @keyframes ring-rotate { to { transform: rotate(360deg); } }
+    .insta-ring {
+      background: conic-gradient(from 0deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75);
+      padding: 3px;
+      border-radius: 50%;
+      animation: ring-rotate 4s linear infinite;
+    }
+
+    /* card entrance */
+    @keyframes fade-up {
+      0%   { opacity: 0; transform: translateY(24px) scale(.97); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .animate-fade-up { animation: fade-up .7s cubic-bezier(.22,1,.36,1) forwards; opacity: 0; }
+    .delay-1 { animation-delay: .15s; }
+    .delay-2 { animation-delay: .3s; }
+    .delay-3 { animation-delay: .45s; }
+
+    /* avatar float */
+    @keyframes avatar-float {
+      0%,100% { transform: translateY(0); }
+      50%     { transform: translateY(-6px); }
+    }
+    .avatar-float { animation: avatar-float 3s ease-in-out infinite; }
+    /* posts grid */
+    .posts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border-radius: 12px; overflow: hidden; }
+    .post-thumb { position: relative; aspect-ratio: 1; overflow: hidden; cursor: pointer; }
+    .post-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s ease, filter .3s ease; }
+    .post-thumb:hover img { transform: scale(1.08); filter: brightness(0.7); }
+    .post-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; opacity: 0; transition: opacity .3s ease; pointer-events: none; }
+    .post-thumb:hover .post-overlay { opacity: 1; }
+    .post-stat { display: flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 700; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+
+    @keyframes skeleton-pulse { 0%,100%{opacity:.15} 50%{opacity:.3} }
+    .skeleton { background: rgba(255,255,255,.08); animation: skeleton-pulse 1.5s ease-in-out infinite; border-radius: 4px; }
+  </style>
   <script>
     tailwind.config = {
       darkMode: "class",
       theme: {
         extend: {
-          colors: {
-            primary: "#E1306C",
-            "background-light": "#f6f7f8",
-            "background-dark": "#101c22",
-          },
-          fontFamily: {
-            display: ["Space Grotesk", "sans-serif"],
-          },
-          borderRadius: {
-            DEFAULT: "0.5rem",
-            lg: "1rem",
-            xl: "1.5rem",
-            full: "9999px",
-          },
+          colors: { primary: "#e1306c", accent: "#833ab4", "background-dark": "#0a0a0a" },
+          fontFamily: { display: ["Space Grotesk", "sans-serif"] },
+          borderRadius: { DEFAULT: "0.5rem", lg: "1rem", xl: "1.5rem", full: "9999px" },
         },
       },
     };
   </script>
-  <style>
-    body {
-      font-family: "Space Grotesk", sans-serif;
-    }
-
-    @keyframes fade-in-up {
-      0% {
-        opacity: 0;
-        transform: translateY(20px) scale(0.95);
-      }
-
-      100% {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-
-    .animate-fade-in-up {
-      animation: fade-in-up 0.6s ease-out forwards;
-    }
-  </style>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark font-display text-slate-800 dark:text-slate-200">
-  <div class="flex flex-col min-h-screen">
-    <header class="w-full">
+<body class="animated-gradient-bg font-display text-slate-200 overflow-x-hidden">
+  <!-- orbs -->
+  <div class="orb w-[500px] h-[500px] bg-[#833ab4]/30 top-[-100px] left-[-150px] fixed" style="animation:float-1 12s ease-in-out infinite"></div>
+  <div class="orb w-[400px] h-[400px] bg-[#fd1d1d]/20 bottom-[-80px] right-[-100px] fixed" style="animation:float-2 14s ease-in-out infinite"></div>
+
+  <div class="relative flex flex-col min-h-screen grid-pattern">
+    <!-- header -->
+    <header class="w-full sticky top-0 z-50 backdrop-blur-xl bg-black/30 border-b border-white/5">
       <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-20 border-b border-slate-200/50 dark:border-slate-800/50">
-          <div class="flex items-center gap-3">
-            <svg class="h-8 w-8 text-primary" fill="currentColor" viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919C8.416 2.175 8.796 2.163 12 2.163zm0 1.441c-3.117 0-3.483.011-4.692.068-2.617.119-3.83 1.341-3.951 3.951-.057 1.209-.068 1.575-.068 4.692s.011 3.483.068 4.692c.121 2.61 1.334 3.832 3.951 3.951 1.209.057 1.575.068 4.692.068s3.483-.011 4.692-.068c2.617-.119 3.83-1.341 3.951-3.951.057-1.209.068-1.575.068-4.692s-.011-3.483-.068-4.692c-.121-2.61-1.334-3.832-3.951-3.951C15.483 3.615 15.117 3.604 12 3.604zm0 4.881c-2.344 0-4.25 1.906-4.25 4.25s1.906 4.25 4.25 4.25 4.25-1.906 4.25-4.25-1.906-4.25-4.25-4.25zm0 7.001c-1.543 0-2.791-1.248-2.791-2.791s1.248-2.791 2.791-2.791 2.791 1.248 2.791 2.791-1.248 2.791-2.791 2.791zm5.235-7.391c-.633 0-1.145.513-1.145 1.146s.512 1.146 1.145 1.146 1.145-.513 1.145-1.146-.512-1.146-1.145-1.146z">
-              </path>
-            </svg>
-            <h1 class="text-xl font-bold text-slate-900 dark:text-white">AI Persona</h1>
-          </div>
-          <nav class="hidden md:flex items-center gap-8">
-            <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
-              href="#">Home</a>
-            <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
-              href="#">About</a>
-            <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
-              href="#">Contact</a>
-          </nav>
-          <div class="flex items-center">
-            <a class="bg-primary text-white font-bold text-sm py-2 px-6 rounded-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105"
-              href="/login.html">
-              Log In
-            </a>
-          </div>
+        <div class="flex items-center justify-between h-16">
+          <a href="/" class="flex items-center gap-3 group">
+            <span class="material-symbols-outlined text-primary text-xl">smart_toy</span>
+            <h1 class="text-xl font-bold text-white">AI Persona</h1>
+          </a>
         </div>
       </div>
     </header>
-    <main class="flex-grow flex items-center justify-center">
-      <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <div class="max-w-xl mx-auto">
-          <div
-            class="bg-background-light dark:bg-slate-800/50 rounded-xl shadow-2xl shadow-primary/10 dark:shadow-primary/5 p-8 md:p-12 transition-all duration-500 transform scale-100 animate-fade-in-up">
-            <h2 class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">
-              Confirm Persona
-            </h2>
-            <p class="text-lg text-slate-600 dark:text-slate-400 mb-8">
-              We've generated a persona based on the following profile. Please confirm to proceed.
-            </p>
-            <div id="profile-details" class="flex flex-col items-center justify-center gap-4 mb-8">
-              <img id="profile-pic" class="w-24 h-24 rounded-full border-2 border-primary"
-                src="https://via.placeholder.com/150" alt="Profile Picture" />
-              <div class="flex flex-col gap-1">
-                <span id="full-name" class="text-xl font-bold text-slate-900 dark:text-white"></span>
-                <span id="username" class="text-lg font-bold text-primary tracking-widest"></span>
+
+    <!-- main -->
+    <main class="flex-grow flex items-center justify-center px-4 py-12">
+      <div class="max-w-md w-full">
+        <div class="glass rounded-2xl p-8 md:p-10 shadow-2xl shadow-primary/5 animate-fade-up">
+          <h2 class="text-2xl md:text-3xl font-bold text-white tracking-tight text-center mb-2 animate-fade-up delay-1">
+            Confirm <span class="gradient-text">Persona</span>
+          </h2>
+          <p class="text-sm text-gray-400 text-center mb-8 animate-fade-up delay-1">
+            Review the profile below and confirm to start chatting.
+          </p>
+
+          <!-- profile card -->
+          <div id="profile-details" class="flex flex-col items-center gap-4 mb-8 animate-fade-up delay-2">
+            <div class="avatar-float">
+              <div class="insta-ring">
+                <img id="profile-pic" class="w-24 h-24 rounded-full object-cover bg-slate-800" src="https://via.placeholder.com/150" alt="Profile Picture" />
               </div>
             </div>
-            <div class="bg-slate-100 dark:bg-slate-900/50 rounded-lg p-6 mb-8 text-left">
-              <p id="bio" class="text-sm text-slate-600 dark:text-slate-400"></p>
+            <div class="text-center">
+              <p id="full-name" class="text-xl font-bold text-white"></p>
+              <p id="username" class="text-sm font-semibold text-primary tracking-wide mt-0.5"></p>
             </div>
-<div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-  <button id="confirmBtn"
-    class="w-full sm:w-auto bg-primary text-white font-bold text-lg py-3 px-10 rounded-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105 inline-flex items-center justify-center shadow-lg shadow-primary/30">
-    Confirm
-  </button>
-  <a class="w-full sm:w-auto bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-lg py-3 px-10 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-all duration-300 transform hover:scale-105 inline-flex items-center justify-center"
-    href="/add-username.html">
-    Edit
-  </a>
-</div>
+          </div>
+
+          <!-- bio -->
+          <div class="bg-white/5 border border-white/5 rounded-xl p-5 mb-8 animate-fade-up delay-2">
+            <p class="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">
+              <span class="material-symbols-outlined text-sm">description</span> Bio
+            </p>
+            <p id="bio" class="text-sm text-gray-300 leading-relaxed"></p>
+          </div>
+
+          <!-- actions -->
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-up delay-3">
+            <button id="confirmBtn"
+              class="w-full sm:w-auto btn-shimmer text-white font-bold text-base py-3 px-10 rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-lg">check_circle</span>
+              Confirm
+            </button>
+            <a href="/add-username.html"
+              class="w-full sm:w-auto bg-white/5 border border-white/10 text-gray-300 font-bold text-base py-3 px-10 rounded-xl hover:bg-white/10 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-lg">edit</span>
+              Edit
+            </a>
+          </div>
+        </div>
+
+        <!-- back -->
+        <div class="text-center mt-6 animate-fade-up" style="animation-delay:.5s">
+          <a href="/add-username.html" class="text-sm text-gray-500 hover:text-primary transition-colors duration-300 inline-flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">arrow_back</span>
+            Change username
+          </a>
+        </div>
+
+        <!-- Instagram Posts Section -->
+        <div id="posts-section" class="mt-8 animate-fade-up" style="animation-delay:.6s">
+          <div class="glass rounded-2xl p-6 shadow-2xl shadow-primary/5">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2 mb-4">
+              <span class="material-symbols-outlined text-primary">grid_view</span>
+              Recent Posts
+            </h3>
+
+            <!-- loading skeleton -->
+            <div id="posts-loading" class="posts-grid">
+              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+            </div>
+
+            <!-- actual grid -->
+            <div id="posts-grid" class="posts-grid" style="display:none"></div>
+
+            <!-- message for private / unavailable -->
+            <div id="posts-message" class="hidden text-center py-8">
+              <span class="material-symbols-outlined text-4xl text-gray-600 mb-2 block">lock</span>
+              <p id="posts-message-text" class="text-sm text-gray-400"></p>
+            </div>
           </div>
         </div>
       </div>
     </main>
   </div>
+
   <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const personaData = JSON.parse(localStorage.getItem('personaData'));
-  const profilePicElement = document.getElementById('profile-pic');
-  const placeholderPic = 'https://via.placeholder.com/150';
+    // Auth guard — verify token with server
+    (async () => {
+      const token = localStorage.getItem('token');
+      if (!token) { window.location.href = '/login.html'; return; }
+      try {
+        const r = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!r.ok) throw new Error('invalid');
+      } catch (e) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('personaData');
+        window.location.href = '/login.html';
+      }
+    })();
 
-  if (personaData && personaData.profile_pic_url) {
-    const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(personaData.profile_pic_url)}`;
-    profilePicElement.src = proxyUrl;
-    profilePicElement.alt = `Profile picture of ${personaData.name}`;
+    document.addEventListener('DOMContentLoaded', () => {
+      const personaData = JSON.parse(localStorage.getItem('personaData'));
+      const profilePicElement = document.getElementById('profile-pic');
+      const placeholderPic = 'https://via.placeholder.com/150';
 
-    document.getElementById('full-name').textContent = personaData.name;
-    document.getElementById('username').textContent = `@${personaData.username}`;
-    document.getElementById('bio').textContent = personaData.bio;
+      if (personaData && personaData.profile_pic_url) {
+        const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(personaData.profile_pic_url)}`;
+        profilePicElement.src = proxyUrl;
+        profilePicElement.alt = `Profile picture of ${personaData.name}`;
+        document.getElementById('full-name').textContent = personaData.name;
+        document.getElementById('username').textContent = `@${personaData.username}`;
+        document.getElementById('bio').textContent = personaData.bio || 'No bio available.';
+        localStorage.setItem('aiPersonaPic', proxyUrl);
+      } else if (personaData) {
+        profilePicElement.src = placeholderPic;
+        profilePicElement.alt = `Profile picture of ${personaData.name}`;
+        document.getElementById('full-name').textContent = personaData.name;
+        document.getElementById('username').textContent = `@${personaData.username}`;
+        document.getElementById('bio').textContent = personaData.bio || 'No bio available.';
+        localStorage.setItem('aiPersonaPic', placeholderPic);
+      } else {
+        window.location.href = '/add-username.html';
+        return;
+      }
 
-    localStorage.setItem('aiPersonaPic', proxyUrl);
-  } else if (personaData) {
-    profilePicElement.src = placeholderPic;
-    profilePicElement.alt = `Profile picture of ${personaData.name}`;
-
-    document.getElementById('full-name').textContent = personaData.name;
-    document.getElementById('username').textContent = `@${personaData.username}`;
-    document.getElementById('bio').textContent = personaData.bio;
-
-    localStorage.setItem('aiPersonaPic', placeholderPic);
-  } else {
-    // no local persona -> go back to add username
-    window.location.href = '/add-username.html';
-    return;
-  }
-
-  // Confirm button behavior: POST to /generate-persona to set server session, then redirect to chat (/)
-  document.getElementById('confirmBtn').addEventListener('click', async () => {
-    const persona = JSON.parse(localStorage.getItem('personaData'));
-    if (!persona || !persona.username) {
-      alert('Persona data missing — please add username first.');
-      window.location.href = '/add-username.html';
-      return;
-    }
-
-    // Prepare payload minimal (server uses username and optional voiceId)
-    const payload = {
-      username: persona.username,
-      voiceId: persona.voiceId || null
-    };
-
-    try {
-      const res = await fetch('/generate-persona', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      // Confirm: session is already set from add-username page, just redirect
+      document.getElementById('confirmBtn').addEventListener('click', () => {
+        const persona = JSON.parse(localStorage.getItem('personaData'));
+        if (!persona || !persona.username) {
+          alert('Persona data missing — please add username first.');
+          window.location.href = '/add-username.html';
+          return;
+        }
+        window.location.href = '/chat';
       });
 
-      if (res.ok) {
-        // success: server attached persona to session — go to chat
-        window.location.href = '/chat';
-      } else {
-        // server returned error JSON or HTML (fallback)
-        console.warn('Server responded with non-OK status for /generate-persona', res.status);
-        // Save locally for debugging and still proceed to chat (so user flow isn't blocked)
-        localStorage.setItem('personaDataServerSaved', JSON.stringify(persona));
-        window.location.href = '/chat';
+      // ── Fetch Instagram Posts ──
+      if (personaData && personaData.username) {
+        fetchPosts(personaData.username);
       }
-    } catch (err) {
-      console.error('Network error calling /generate-persona', err);
-      // fallback: still proceed but mark that server call failed
-      localStorage.setItem('personaDataServerSaved', JSON.stringify(persona));
-      window.location.href = '/chat';
+    });
+
+    function formatCount(n) {
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+      return String(n);
     }
-  });
-});
-</script>
+
+    async function fetchPosts(username) {
+      const loading = document.getElementById('posts-loading');
+      const grid    = document.getElementById('posts-grid');
+      const msgBox  = document.getElementById('posts-message');
+      const msgText = document.getElementById('posts-message-text');
+
+      try {
+        const res = await fetch(`/instagram-posts?username=${encodeURIComponent(username)}&limit=12`);
+        const data = await res.json();
+
+        if (res.status === 429) {
+          loading.style.display = 'none';
+          msgBox.classList.remove('hidden');
+          const retryAfterSec = parseInt(data.retryAfterSec || '0', 10) || 0;
+          const waitHint = retryAfterSec > 0 ? ` Please wait about ${retryAfterSec}s and try again.` : ' Please wait a bit and try again.';
+          msgText.textContent =
+            (data.error || "Sorry, we're temporarily rate-limited while loading posts.") + waitHint;
+          return;
+        }
+
+        loading.style.display = 'none';
+
+        // If API returned a message (private / error)
+        if (data.message || !data.posts || data.posts.length === 0) {
+          msgBox.classList.remove('hidden');
+          msgText.textContent = data.message || `No posts found for @${username}.`;
+          return;
+        }
+
+        // Render posts
+        data.posts.forEach(post => {
+          const thumb = document.createElement('div');
+          thumb.className = 'post-thumb';
+
+          const proxyImg = `/api/image-proxy?url=${encodeURIComponent(post.image_url)}`;
+
+          thumb.innerHTML = `
+            <img src="${proxyImg}" alt="${post.caption?.substring(0, 60) || 'Instagram post'}" loading="lazy" />
+            <div class="post-overlay">
+              <span class="post-stat"><span class="material-symbols-outlined" style="font-size:16px">favorite</span> ${formatCount(post.like_count)}</span>
+              <span class="post-stat"><span class="material-symbols-outlined" style="font-size:16px">chat_bubble</span> ${formatCount(post.comment_count)}</span>
+            </div>`;
+          grid.appendChild(thumb);
+        });
+
+        grid.style.display = 'grid';
+      } catch (err) {
+        console.error('Failed to load posts:', err);
+        loading.style.display = 'none';
+        msgBox.classList.remove('hidden');
+        msgText.textContent = 'Could not load Instagram posts at this time.';
+      }
+    }
+  </script>
 </body>
 </html>

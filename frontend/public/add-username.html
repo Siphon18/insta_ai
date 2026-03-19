@@ -2,232 +2,665 @@
 <html class="dark" lang="en">
 
 <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>AI Persona Generator</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
-        rel="stylesheet" />
-    <style>
-        @keyframes user-reveal {
-            0% {
-                opacity: 0;
-                letter-spacing: -1em;
-                transform: translateY(20px);
-            }
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>AI Persona &mdash; Generate</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <style>
+    body { font-family: 'Space Grotesk', sans-serif; }
 
-            100% {
-                opacity: 1;
-                letter-spacing: normal;
-                transform: translateY(0);
-            }
-        }
+    /* animated bg */
+    @keyframes gradient-shift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .animated-gradient-bg {
+      background: linear-gradient(-45deg, #0a0a0a, #1a0a2e, #120a1e, #0d0d0d, #1c0818);
+      background-size: 400% 400%;
+      animation: gradient-shift 18s ease infinite;
+    }
 
-        .animate-user-reveal {
-            animation: user-reveal 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-        }
-    </style>
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#13a4ec",
-                        "background-light": "#f6f7f8",
-                        "background-dark": "#101c22",
-                    },
-                    fontFamily: {
-                        display: ["Space Grotesk", "sans-serif"],
-                    },
-                    borderRadius: {
-                        DEFAULT: "0.5rem",
-                        lg: "1rem",
-                        xl: "1.5rem",
-                        full: "9999px",
-                    },
-                },
-            },
-        };
-    </script>
-    <style>
-        body {
-            font-family: "Space Grotesk", sans-serif;
-        }
-    </style>
+    /* orbs */
+    .orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .2; pointer-events: none; }
+    @keyframes float-1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(40px,-60px) scale(1.15)} }
+    @keyframes float-2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-50px,40px) scale(1.1)} }
+
+    .grid-pattern {
+      background-image: radial-gradient(circle, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 30px 30px;
+    }
+
+    /* glass */
+    .glass {
+      background: rgba(255,255,255,.04);
+      backdrop-filter: blur(20px) saturate(1.3);
+      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* shimmer btn */
+    @keyframes shimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
+    .btn-shimmer {
+      background-size: 200% auto;
+      background-image: linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045, #fd1d1d, #833ab4);
+      animation: shimmer 4s linear infinite;
+    }
+
+    /* entrance */
+    @keyframes fade-up {
+      0%   { opacity: 0; transform: translateY(24px) scale(.97); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .animate-fade-up { animation: fade-up .7s cubic-bezier(.22,1,.36,1) forwards; opacity: 0; }
+    .delay-1 { animation-delay: .1s; }
+    .delay-2 { animation-delay: .2s; }
+    .delay-3 { animation-delay: .3s; }
+
+    /* input glow */
+    .input-glow:focus-within {
+      box-shadow: 0 0 0 2px rgba(225,48,108,.35), 0 0 20px -4px rgba(131,58,180,.2);
+    }
+
+    /* loading spinner */
+    @keyframes spin-slow { to { transform: rotate(360deg); } }
+    .spinner { animation: spin-slow .8s linear infinite; }
+
+    /* success check */
+    @keyframes check-draw {
+      0%   { stroke-dashoffset: 24; }
+      100% { stroke-dashoffset: 0; }
+    }
+    /* loading icon pulse */
+    @keyframes icon-swap { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.3;transform:scale(.85)} }
+    .loading-icon { animation: icon-swap 2s ease-in-out infinite; }
+    .step-dot.active { background: #e1306c !important; box-shadow: 0 0 8px #e1306c80; transform: scale(1.3); }
+
+    /* persona cards */
+    .persona-card {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 16px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all .3s cubic-bezier(.22,1,.36,1);
+      position: relative;
+      overflow: hidden;
+    }
+    .persona-card:hover {
+      border-color: rgba(225,48,108,.4);
+      background: rgba(225,48,108,.06);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px -12px rgba(131,58,180,.3);
+    }
+    .persona-card .insta-ring { background: conic-gradient(from 0deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75); padding: 2px; border-radius: 50%; display: inline-block; }
+    .persona-card .avatar { width: 48px; height: 48px; border-radius: 50%; background-size: cover; background-position: center; }
+    @keyframes card-in { 0%{opacity:0;transform:translateY(12px) scale(.95)} 100%{opacity:1;transform:translateY(0) scale(1)} }
+    .persona-card { animation: card-in .4s cubic-bezier(.22,1,.36,1) forwards; opacity: 0; }
+
+    .persona-grid-window {
+      overflow: hidden;
+      max-height: 1200px;
+      transition: max-height .45s cubic-bezier(.22,1,.36,1);
+      position: relative;
+    }
+    .persona-grid-window.collapsed { max-height: 360px; }
+    .persona-grid-fade {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 90px;
+      background: linear-gradient(to top, rgba(10,10,10,.92), rgba(10,10,10,0));
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .3s ease;
+    }
+    .persona-grid-fade.visible { opacity: 1; }
+    .persona-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.04);
+      color: #cbd5e1;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all .25s ease;
+    }
+    .persona-toggle-btn:hover {
+      border-color: rgba(225,48,108,.35);
+      color: #fff;
+      background: rgba(225,48,108,.12);
+      transform: translateY(-1px);
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: { primary: "#e1306c", accent: "#833ab4", "background-dark": "#0a0a0a" },
+          fontFamily: { display: ["Space Grotesk", "sans-serif"] },
+          borderRadius: { DEFAULT: "0.5rem", lg: "1rem", xl: "1.5rem", full: "9999px" },
+        },
+      },
+    };
+  </script>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark font-display text-slate-800 dark:text-slate-200">
-    <div class="flex flex-col min-h-screen">
-        <header class="w-full">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-                <div
-                    class="flex items-center justify-between h-20 border-b border-slate-200/50 dark:border-slate-800/50">
-                    <div class="flex items-center gap-3">
-                        <svg class="text-primary" fill="none" height="24" viewBox="0 0 24 24" width="24"
-                            xmlns="http://www.w3.org/2000/svg">
-                            <path
-                                d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 4C14.76 4 17.1 5.44 18.43 7.57L16.22 9.78C15.26 8.82 13.74 8.25 12 8.25C10.26 8.25 8.74 8.82 7.78 9.78L5.57 7.57C6.9 5.44 9.24 4 12 4ZM12 20C9.24 20 6.9 18.56 5.57 16.43L7.78 14.22C8.74 15.18 10.26 15.75 12 15.75C13.74 15.75 15.26 15.18 16.22 14.22L18.43 16.43C17.1 18.56 14.76 20 12 20Z"
-                                fill="currentColor"></path>
-                        </svg>
-                        <h1 class="text-xl font-bold text-slate-900 dark:text-white">AI Persona</h1>
-                    </div>
-                    <nav class="hidden md:flex items-center gap-8">
-                        <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
-                            href="#">Home</a>
-                        <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
-                            href="#">About</a>
-                        <a class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
-                            href="#">Contact</a>
-                    </nav>
-                    <div class="flex items-center">
-                        <a href="login.html"
-                            class="bg-primary text-white font-bold text-sm py-2 px-6 rounded-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105">
-                            Log In
-                        </a>
-                    </div>
-                </div>
+<body class="animated-gradient-bg font-display text-slate-200 overflow-x-hidden">
+  <!-- orbs -->
+  <div class="orb w-[500px] h-[500px] bg-[#833ab4]/30 top-[-100px] left-[-150px] fixed" style="animation:float-1 12s ease-in-out infinite"></div>
+  <div class="orb w-[400px] h-[400px] bg-[#fd1d1d]/20 bottom-[-80px] right-[-100px] fixed" style="animation:float-2 14s ease-in-out infinite"></div>
+
+  <div class="relative flex flex-col min-h-screen grid-pattern">
+    <!-- header -->
+    <header class="w-full sticky top-0 z-50 backdrop-blur-xl bg-black/30 border-b border-white/5">
+      <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <a href="/" class="flex items-center gap-3 group">
+            <span class="material-symbols-outlined text-primary text-xl">smart_toy</span>
+            <h1 class="text-xl font-bold text-white">AI Persona</h1>
+          </a>
+          <nav class="hidden md:flex items-center gap-8">
+            <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors duration-300" href="/">Home</a>
+            <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors duration-300" href="/">About</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <!-- main -->
+    <main class="flex-grow flex items-center justify-center py-12 px-4">
+      <div class="max-w-2xl w-full space-y-8">
+
+        <!-- PERSONA LIBRARY -->
+        <div id="persona-library" class="glass rounded-2xl p-6 md:p-8 shadow-2xl shadow-primary/5 animate-fade-up hidden">
+          <div class="flex items-center justify-between mb-5">
+            <div class="flex items-center gap-3">
+              <div class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#833ab4]/20 to-[#fd1d1d]/10 border border-white/5">
+                <span class="material-symbols-outlined text-xl gradient-text" style="-webkit-text-fill-color:unset;background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">group</span>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-white">Persona Library</h3>
+                <p class="text-xs text-gray-500">Pick an existing persona or generate a new one below</p>
+              </div>
             </div>
-        </header>
-        <main class="flex-grow flex items-center justify-center">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                <div class="max-w-xl mx-auto">
-                    <h2
-                        class="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight mb-4">
-                        Discover a New Persona
-                    </h2>
-                    <p class="text-lg text-slate-600 dark:text-slate-400 mb-10">
-                        Enter an Instagram username to generate an AI-powered personality profile based on their public
-                        activity.
-                    </p>
-                    <form id="persona-form" class="max-w-md mx-auto">
-                        <div class="space-y-6">
-                            <div class="relative">
-                                <label for="username-input" class="sr-only">Username</label>
-                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <span class="text-slate-400 dark:text-slate-500">@</span>
-                                </div>
-                                <input id="username-input"
-                                    class="w-full pl-8 pr-4 py-4 bg-background-light dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all duration-300"
-                                    placeholder="username" type="text" name="username" required />
-                            </div>
+            <span id="persona-count" class="text-xs text-gray-500 bg-white/5 px-2.5 py-1 rounded-full"></span>
+          </div>
+          <div id="persona-grid-window" class="persona-grid-window collapsed">
+            <div id="persona-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+            <div id="persona-grid-fade" class="persona-grid-fade visible"></div>
+          </div>
+          <div id="persona-toggle-wrap" class="hidden mt-4 flex justify-center">
+            <button id="persona-toggle-btn" type="button" class="persona-toggle-btn">
+              <span id="persona-toggle-icon" class="material-symbols-outlined" style="font-size:16px">expand_more</span>
+              <span id="persona-toggle-label">Show all personas</span>
+            </button>
+          </div>
+        </div>
 
-                            <div>
-                                <label for="voice-select" class="sr-only">Preferred Voice</label>
-                                <select id="voice-select" name="voice"
-                                    class="w-full py-4 px-3 bg-background-light dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all duration-300">
-                                    <option value="">Auto-detect voice from profile</option>
-                                    </select>
-                            </div>
-                        </div>
-
-                        <div class="mt-8">
-                            <button type="submit"
-                                class="w-full sm:w-auto bg-primary text-white font-bold text-lg py-4 px-12 rounded-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-primary/30">
-                                Generate Persona
-                            </button>
-                        </div>
-                    </form>
-                    <div id="loading-state" class="hidden mt-8 flex flex-col items-center gap-4 text-center">
-                        <div class="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent">
-                        </div>
-                        <p class="text-slate-600 dark:text-slate-400">Generating persona...</p>
-                    </div>
-
-                    <div id="error-message"
-                        class="hidden mt-4 p-4 rounded-lg bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200">
-                        <p></p>
-                    </div>
-
-                </div>
+        <!-- ADMIN RAPIDAPI USAGE -->
+        <div id="admin-usage-card" class="glass rounded-2xl p-6 md:p-8 shadow-2xl shadow-primary/5 animate-fade-up hidden">
+          <div class="flex items-center justify-between mb-5">
+            <div class="flex items-center gap-3">
+              <div class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#833ab4]/20 to-[#fd1d1d]/10 border border-white/5">
+                <span class="material-symbols-outlined text-xl gradient-text" style="-webkit-text-fill-color:unset;background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">analytics</span>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-white">RapidAPI Usage</h3>
+                <p class="text-xs text-gray-500">Admin-only quota dashboard</p>
+              </div>
             </div>
-        </main>
-    </div>
+            <button id="refresh-admin-usage" type="button" class="text-xs text-primary hover:text-primary/80 transition-colors">
+              Refresh
+            </button>
+          </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const personaForm = document.getElementById('persona-form');
-            const usernameInput = document.getElementById('username-input');
-            const voiceSelect = document.getElementById('voice-select'); // Get the select element
-            const loadingState = document.getElementById('loading-state');
-            const errorMessageDiv = document.getElementById('error-message');
-            const submitButton = personaForm.querySelector('button');
+          <div class="space-y-4">
+            <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div class="flex items-center justify-between text-xs mb-2">
+                <span class="text-gray-400 uppercase tracking-wide">Daily</span>
+                <span id="admin-daily-text" class="text-gray-300">-</span>
+              </div>
+              <div class="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div id="admin-daily-bar" class="h-2 bg-gradient-to-r from-[#833ab4] to-[#e1306c]" style="width:0%"></div>
+              </div>
+              <p id="admin-daily-reset" class="text-[11px] text-gray-500 mt-2">Resets: -</p>
+            </div>
 
-            // --- NEW: Function to load voices into the dropdown ---
-            async function loadVoices() {
-                try {
-                    const response = await fetch('/get-voices');
-                    if (!response.ok) return; // Fail silently if voices can't be loaded
-                    const voices = await response.json();
+            <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div class="flex items-center justify-between text-xs mb-2">
+                <span class="text-gray-400 uppercase tracking-wide">Monthly</span>
+                <span id="admin-monthly-text" class="text-gray-300">-</span>
+              </div>
+              <div class="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div id="admin-monthly-bar" class="h-2 bg-gradient-to-r from-[#fd1d1d] to-[#fcb045]" style="width:0%"></div>
+              </div>
+              <p id="admin-monthly-reset" class="text-[11px] text-gray-500 mt-2">Resets: -</p>
+            </div>
+          </div>
+        </div>
 
-                    const maleOptgroup = document.createElement('optgroup');
-                    maleOptgroup.label = 'Male Voices';
-                    voices.male.forEach(voice => {
-                        const option = document.createElement('option');
-                        option.value = voice.voiceId;
-                        option.textContent = `${voice.voiceId} (${voice.description})`;
-                        maleOptgroup.appendChild(option);
-                    });
+        <!-- GENERATE NEW (existing card) -->
+        <div class="glass rounded-2xl p-8 md:p-10 shadow-2xl shadow-primary/5 animate-fade-up">
+          <!-- heading -->
+          <div class="text-center mb-8 animate-fade-up delay-1">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-[#833ab4]/20 to-[#fd1d1d]/10 border border-white/5 mb-4">
+              <span class="material-symbols-outlined text-3xl gradient-text" style="-webkit-text-fill-color:unset;background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">person_search</span>
+            </div>
+            <h2 class="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">
+              Discover a <span class="gradient-text">Persona</span>
+            </h2>
+            <p class="text-gray-400">Enter an Instagram username to generate an AI personality.</p>
+          </div>
 
-                    const femaleOptgroup = document.createElement('optgroup');
-                    femaleOptgroup.label = 'Female Voices';
-                    voices.female.forEach(voice => {
-                        const option = document.createElement('option');
-                        option.value = voice.voiceId;
-                        option.textContent = `${voice.voiceId} (${voice.description})`;
-                        femaleOptgroup.appendChild(option);
-                    });
+          <!-- form -->
+          <form id="persona-form" class="animate-fade-up delay-2">
+            <div class="space-y-5">
+              <!-- username -->
+              <div class="relative input-glow rounded-xl transition-all duration-300">
+                <label for="username-input" class="sr-only">Username</label>
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <span class="text-gray-500 text-lg">@</span>
+                </div>
+                <input id="username-input"
+                  class="w-full pl-9 pr-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:ring-0 focus:border-primary/50 outline-none transition-all duration-300"
+                  placeholder="username" type="text" name="username" required autocomplete="off" spellcheck="false" />
+              </div>
 
-                    voiceSelect.appendChild(maleOptgroup);
-                    voiceSelect.appendChild(femaleOptgroup);
-                } catch (error) {
-                    console.error('Could not load voice options:', error);
-                }
+              <!-- voice select -->
+              <div class="relative input-glow rounded-xl transition-all duration-300">
+                <label for="voice-select" class="sr-only">Preferred Voice</label>
+                <select id="voice-select" name="voice"
+                  class="w-full py-4 px-4 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-0 focus:border-primary/50 outline-none transition-all duration-300 appearance-none cursor-pointer">
+                  <option value="" class="bg-slate-900">Auto-detect voice from profile</option>
+                </select>
+                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                  <span class="material-symbols-outlined text-gray-500 text-lg">expand_more</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- submit -->
+            <div class="mt-8 animate-fade-up delay-3">
+              <button type="submit" id="submit-btn"
+                class="w-full btn-shimmer text-white font-bold text-lg py-4 px-8 rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-400 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined">auto_awesome</span>
+                Generate Persona
+              </button>
+            </div>
+          </form>
+
+          <!-- loading state -->
+          <div id="loading-state" class="hidden mt-8 flex flex-col items-center gap-5">
+            <div class="relative">
+              <div class="w-16 h-16 rounded-full border-[3px] border-primary/20 border-t-primary spinner"></div>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="material-symbols-outlined text-primary text-xl loading-icon">person_search</span>
+              </div>
+            </div>
+            <p id="loading-text" class="text-gray-300 text-sm font-medium text-center transition-all duration-500"></p>
+            <div id="loading-steps" class="flex items-center gap-2 mt-1">
+              <div class="step-dot w-2 h-2 rounded-full bg-white/10 transition-all duration-500"></div>
+              <div class="step-dot w-2 h-2 rounded-full bg-white/10 transition-all duration-500"></div>
+              <div class="step-dot w-2 h-2 rounded-full bg-white/10 transition-all duration-500"></div>
+              <div class="step-dot w-2 h-2 rounded-full bg-white/10 transition-all duration-500"></div>
+              <div class="step-dot w-2 h-2 rounded-full bg-white/10 transition-all duration-500"></div>
+            </div>
+          </div>
+
+          <!-- error -->
+          <div id="error-message" class="hidden mt-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm flex items-start gap-3">
+            <span class="material-symbols-outlined text-red-400 shrink-0">error</span>
+            <p></p>
+          </div>
+        </div>
+
+        <!-- back link -->
+        <div class="text-center mt-6 animate-fade-up" style="animation-delay:.4s">
+          <a href="/" class="text-sm text-gray-500 hover:text-primary transition-colors duration-300 inline-flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">arrow_back</span>
+            Back to home
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Auth helper
+    function getToken() { return localStorage.getItem('token'); }
+    function authHeaders(extra = {}) {
+      const h = { 'Authorization': 'Bearer ' + getToken(), ...extra };
+      return h;
+    }
+
+    // Redirect to login if no token or token is invalid
+    (async () => {
+      const token = getToken();
+      if (!token) { window.location.href = '/login.html'; return; }
+      try {
+        const r = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!r.ok) throw new Error('invalid');
+      } catch (e) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('personaData');
+        window.location.href = '/login.html';
+      }
+    })();
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const personaForm = document.getElementById('persona-form');
+      const usernameInput = document.getElementById('username-input');
+      const voiceSelect = document.getElementById('voice-select');
+      const loadingState = document.getElementById('loading-state');
+      const errorMessageDiv = document.getElementById('error-message');
+      const submitButton = document.getElementById('submit-btn');
+      const personaGridWindow = document.getElementById('persona-grid-window');
+      const personaGridFade = document.getElementById('persona-grid-fade');
+      const personaToggleWrap = document.getElementById('persona-toggle-wrap');
+      const personaToggleBtn = document.getElementById('persona-toggle-btn');
+      const personaToggleIcon = document.getElementById('persona-toggle-icon');
+      const personaToggleLabel = document.getElementById('persona-toggle-label');
+      const adminUsageCard = document.getElementById('admin-usage-card');
+      const refreshAdminUsageBtn = document.getElementById('refresh-admin-usage');
+      const COMPACT_PERSONA_THRESHOLD = 6;
+      let personasExpanded = false;
+
+      function formatResetTime(iso) {
+        if (!iso) return '-';
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return iso;
+        return d.toLocaleString();
+      }
+
+      function usagePercent(used, limit) {
+        if (!limit || limit <= 0) return 0;
+        return Math.max(0, Math.min(100, Math.round((used / limit) * 100)));
+      }
+
+      function applyUsageRow(prefix, usage) {
+        const textEl = document.getElementById(`admin-${prefix}-text`);
+        const barEl = document.getElementById(`admin-${prefix}-bar`);
+        const resetEl = document.getElementById(`admin-${prefix}-reset`);
+        if (!textEl || !barEl || !resetEl || !usage) return;
+
+        const percent = usagePercent(usage.used, usage.limit);
+        textEl.textContent = `${usage.used}/${usage.limit} used • ${usage.remaining} left`;
+        barEl.style.width = `${percent}%`;
+        resetEl.textContent = `Resets: ${formatResetTime(usage.resetAt)}`;
+      }
+
+      async function loadAdminUsage() {
+        try {
+          const resp = await fetch('/api/admin/rapidapi-usage', { headers: authHeaders() });
+          if (resp.status === 403 || resp.status === 401) {
+            adminUsageCard.classList.add('hidden');
+            return;
+          }
+          if (!resp.ok) return;
+
+          const data = await resp.json();
+          adminUsageCard.classList.remove('hidden');
+          applyUsageRow('daily', data.daily);
+          applyUsageRow('monthly', data.monthly);
+        } catch (err) {
+          console.error('Could not load admin usage:', err);
+        }
+      }
+
+      async function loadVoices() {
+        try {
+          const response = await fetch('/get-voices');
+          if (!response.ok) return;
+          const voices = await response.json();
+
+          const maleOptgroup = document.createElement('optgroup');
+          maleOptgroup.label = 'Male Voices';
+          voices.male.forEach(voice => {
+            const option = document.createElement('option');
+            option.value = voice.voiceId;
+            option.textContent = `${voice.voiceId} (${voice.description})`;
+            option.className = 'bg-slate-900';
+            maleOptgroup.appendChild(option);
+          });
+
+          const femaleOptgroup = document.createElement('optgroup');
+          femaleOptgroup.label = 'Female Voices';
+          voices.female.forEach(voice => {
+            const option = document.createElement('option');
+            option.value = voice.voiceId;
+            option.textContent = `${voice.voiceId} (${voice.description})`;
+            option.className = 'bg-slate-900';
+            femaleOptgroup.appendChild(option);
+          });
+
+          voiceSelect.appendChild(maleOptgroup);
+          voiceSelect.appendChild(femaleOptgroup);
+        } catch (error) {
+          console.error('Could not load voice options:', error);
+        }
+      }
+
+      function setPersonaExpandState(expanded, totalPersonas) {
+        personasExpanded = !!expanded;
+        const shouldCollapse = totalPersonas > COMPACT_PERSONA_THRESHOLD;
+
+        if (!shouldCollapse) {
+          if (personaGridWindow) personaGridWindow.classList.remove('collapsed');
+          if (personaGridFade) personaGridFade.classList.remove('visible');
+          if (personaToggleWrap) personaToggleWrap.classList.add('hidden');
+          return;
+        }
+
+        if (personaToggleWrap) personaToggleWrap.classList.remove('hidden');
+        if (personaGridWindow) {
+          if (personasExpanded) personaGridWindow.classList.remove('collapsed');
+          else personaGridWindow.classList.add('collapsed');
+        }
+        if (personaGridFade) personaGridFade.classList.toggle('visible', !personasExpanded);
+        if (personaToggleIcon) personaToggleIcon.textContent = personasExpanded ? 'expand_less' : 'expand_more';
+        if (personaToggleLabel) {
+          const hiddenCount = Math.max(totalPersonas - COMPACT_PERSONA_THRESHOLD, 0);
+          personaToggleLabel.textContent = personasExpanded
+            ? 'Show less'
+            : `Show all personas${hiddenCount ? ` (+${hiddenCount})` : ''}`;
+        }
+      }
+
+      personaForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const username = usernameInput.value.trim();
+        const voiceId = voiceSelect.value;
+
+        if (!username) return;
+
+        // hide error, show loading
+        errorMessageDiv.classList.add('hidden');
+        errorMessageDiv.querySelector('p').textContent = '';
+        loadingState.classList.remove('hidden');
+        submitButton.disabled = true;
+        submitButton.style.opacity = '0.6';
+
+        // Rotating loading messages
+        const loadingLines = [
+          { text: 'Stalking their profile... professionally 🕵️', icon: 'person_search' },
+          { text: 'Reading their bio like a detective 🔍', icon: 'fingerprint' },
+          { text: 'Downloading their entire vibe... 💫', icon: 'download' },
+          { text: 'Counting their followers (flex check) 💪', icon: 'group' },
+          { text: 'Studying their caption game 📝', icon: 'edit_note' },
+          { text: 'Analyzing personality with AI 🧠', icon: 'psychology' },
+          { text: 'Figuring out if they\'re a morning or night poster 🌙', icon: 'schedule' },
+          { text: 'Teaching AI to talk like them 🎭', icon: 'record_voice_over' },
+          { text: 'Almost there... building persona ✨', icon: 'auto_awesome' },
+          { text: 'Picking the perfect voice 🎤', icon: 'mic' },
+        ];
+        let loadingIndex = 0;
+        const loadingText = document.getElementById('loading-text');
+        const loadingIcon = document.querySelector('.loading-icon');
+        const stepDots = document.querySelectorAll('.step-dot');
+
+        function updateLoadingMsg() {
+          const line = loadingLines[loadingIndex % loadingLines.length];
+          loadingText.style.opacity = '0';
+          setTimeout(() => {
+            loadingText.textContent = line.text;
+            if (loadingIcon) loadingIcon.textContent = line.icon;
+            loadingText.style.opacity = '1';
+          }, 250);
+          // Update step dots
+          const dotIndex = Math.min(loadingIndex, stepDots.length - 1);
+          stepDots.forEach((d, i) => d.classList.toggle('active', i <= dotIndex));
+          loadingIndex++;
+        }
+        updateLoadingMsg();
+        const loadingInterval = setInterval(updateLoadingMsg, 2800);
+
+        try {
+          const res = await fetch('/generate-persona', {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ username, voiceId })
+          });
+
+          if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+            return;
+          }
+
+          const data = await res.json();
+          if (res.ok) {
+            localStorage.setItem('personaData', JSON.stringify(data.personaDetails));
+            window.location.href = '/confirmation.html';
+          } else {
+            if (res.status === 429) {
+              const retryAfterSec = parseInt(data.retryAfterSec || '0', 10) || 0;
+              const waitHint = retryAfterSec > 0 ? ` Please wait about ${retryAfterSec}s and try again.` : ' Please wait a bit and try again.';
+              errorMessageDiv.classList.remove('hidden');
+              errorMessageDiv.querySelector('p').textContent =
+                (data.error || "Sorry, we're getting a lot of requests right now.") + waitHint;
+              return;
             }
+            errorMessageDiv.classList.remove('hidden');
+            errorMessageDiv.querySelector('p').textContent = data.error || 'Something went wrong.';
+          }
+        } catch (error) {
+          console.error('Frontend error:', error);
+          errorMessageDiv.classList.remove('hidden');
+          errorMessageDiv.querySelector('p').textContent = 'A network error occurred. Please try again later.';
+        } finally {
+          clearInterval(loadingInterval);
+          loadingState.classList.add('hidden');
+          stepDots.forEach(d => d.classList.remove('active'));
+          submitButton.disabled = false;
+          submitButton.style.opacity = '1';
+          loadAdminUsage();
+        }
+      });
 
-            // --- MODIFIED: Event listener for form submission ---
-            personaForm.addEventListener('submit', async function (e) {
-                e.preventDefault();
-                const username = usernameInput.value;
-                const voiceId = voiceSelect.value; // Get the selected voice ID
+      // ── Persona Library ──
+      async function loadPersonaLibrary() {
+        try {
+          const resp = await fetch('/api/personas', { headers: authHeaders() });
+          if (!resp.ok) return;
+          const personas = await resp.json();
+          if (!personas.length) return;
 
-                errorMessageDiv.classList.add('hidden');
-                errorMessageDiv.querySelector('p').textContent = '';
-                loadingState.classList.remove('hidden');
-                submitButton.disabled = true;
+          const library = document.getElementById('persona-library');
+          const grid = document.getElementById('persona-grid');
+          const countEl = document.getElementById('persona-count');
+          library.classList.remove('hidden');
+          countEl.textContent = `${personas.length} persona${personas.length > 1 ? 's' : ''}`;
+          grid.innerHTML = '';
 
-                try {
-                    // Include both username and voiceId in the request body
-                    const res = await fetch('/generate-persona', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, voiceId }) // Updated body
-                    });
+          personas.forEach((p, i) => {
+            const card = document.createElement('div');
+            card.className = 'persona-card';
+            card.style.animationDelay = `${i * 0.08}s`;
+            const picUrl = p.profile_pic_url ? `/api/image-proxy?url=${encodeURIComponent(p.profile_pic_url)}` : '';
+            card.innerHTML = `
+              <div class="flex flex-col items-center text-center gap-2.5">
+                <div class="insta-ring">
+                  <div class="avatar" style="background-image:url('${picUrl}')"></div>
+                </div>
+                <div class="min-w-0 w-full">
+                  <p class="text-sm font-bold text-white truncate">${p.name || p.ig_username}</p>
+                  <p class="text-[11px] text-gray-500 truncate">@${p.ig_username}</p>
+                </div>
+                ${p.bio ? `<p class="text-[10px] text-gray-500 leading-snug line-clamp-2 w-full">${p.bio.substring(0, 80)}</p>` : ''}
+                <span class="inline-flex items-center gap-1 text-[10px] text-primary/80 bg-primary/10 px-2 py-0.5 rounded-full">
+                  <span class="material-symbols-outlined" style="font-size:12px">chat</span>
+                  Start chatting
+                </span>
+              </div>`;
+            card.addEventListener('click', () => activatePersona(p));
+            grid.appendChild(card);
+          });
 
-                    const data = await res.json();
-                    if (res.ok) {
-                        localStorage.setItem('personaData', JSON.stringify(data.personaDetails));
-                        window.location.href = '/confirmation.html'; // Redirects as per original file
-                    } else {
-                        errorMessageDiv.classList.remove('hidden');
-                        errorMessageDiv.querySelector('p').textContent = data.error;
-                    }
-                } catch (error) {
-                    console.error('Frontend error:', error);
-                    errorMessageDiv.classList.remove('hidden');
-                    errorMessageDiv.querySelector('p').textContent = 'A network error occurred. Please try again later.';
-                } finally {
-                    loadingState.classList.add('hidden');
-                    submitButton.disabled = false;
-                }
-            });
+          setPersonaExpandState(false, personas.length);
+        } catch (err) {
+          console.error('Could not load persona library:', err);
+        }
+      }
 
-            // Load the voices when the page is ready
-            loadVoices();
+      async function activatePersona(p) {
+        const grid = document.getElementById('persona-grid');
+        // Show a brief loading state on the grid
+        grid.style.opacity = '0.5';
+        grid.style.pointerEvents = 'none';
+        try {
+          const resp = await fetch(`/api/personas/${p.id}/activate`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' })
+          });
+          if (!resp.ok) throw new Error('Activation failed');
+          const data = await resp.json();
+          // Save to localStorage and go to chat
+          localStorage.setItem('personaData', JSON.stringify(data.personaDetails));
+          if (data.personaDetails.profile_pic_url) {
+            localStorage.setItem('aiPersonaPic', `/api/image-proxy?url=${encodeURIComponent(data.personaDetails.profile_pic_url)}`);
+          }
+          window.location.href = '/Chat.html';
+        } catch (err) {
+          console.error('Activation error:', err);
+          grid.style.opacity = '1';
+          grid.style.pointerEvents = 'auto';
+          errorMessageDiv.classList.remove('hidden');
+          errorMessageDiv.querySelector('p').textContent = 'Could not activate persona. Try again.';
+        }
+      }
+
+      if (refreshAdminUsageBtn) {
+        refreshAdminUsageBtn.addEventListener('click', () => {
+          loadAdminUsage();
         });
-    </script>
-</body>
+      }
 
+      if (personaToggleBtn) {
+        personaToggleBtn.addEventListener('click', () => {
+          const totalCards = document.querySelectorAll('#persona-grid .persona-card').length;
+          setPersonaExpandState(!personasExpanded, totalCards);
+        });
+      }
+
+      loadAdminUsage();
+      loadPersonaLibrary();
+      loadVoices();
+    });
+  </script>
+</body>
 </html>

@@ -1,120 +1,561 @@
-// server.js (with corrected file path)
+﻿// server.js â€” JWT + PostgreSQL based backend
 const express = require('express');
-const session = require('express-session');
 const path = require('path');
 const axios = require('axios');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const helmet = require('helmet');
 require('dotenv').config();
+
+const { pool, initDB } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PRODUCTION = NODE_ENV === 'production';
+const JWT_SECRET = process.env.JWT_SECRET;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const GROQ_API_BASE_URL = process.env.GROQ_API_BASE_URL || 'https://api.groq.com/openai/v1';
+const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
+const ELEVENLABS_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT || 'mp3_44100_128';
+const ELEVENLABS_DEFAULT_VOICE_ID = process.env.ELEVENLABS_DEFAULT_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb';
+const RAPIDAPI_WINDOW_MS = Math.max(parseInt(process.env.RAPIDAPI_RATE_WINDOW_MS || '3600000', 10) || 3600000, 1000);
+const RAPIDAPI_GENERATE_LIMIT = Math.max(parseInt(process.env.RAPIDAPI_RATE_LIMIT_GENERATE_PER_WINDOW || '2', 10) || 2, 1);
+const RAPIDAPI_POSTS_LIMIT = Math.max(parseInt(process.env.RAPIDAPI_RATE_LIMIT_POSTS_PER_WINDOW || '6', 10) || 6, 1);
+const RAPIDAPI_DAILY_BUDGET = Math.max(parseInt(process.env.RAPIDAPI_DAILY_BUDGET || '5', 10) || 5, 1);
+const RAPIDAPI_MONTHLY_BUDGET = Math.max(parseInt(process.env.RAPIDAPI_MONTHLY_BUDGET || '145', 10) || 145, 1);
+const AUTH_LOGIN_WINDOW_MS = Math.max(parseInt(process.env.AUTH_LOGIN_RATE_WINDOW_MS || '900000', 10) || 900000, 1000);
+const AUTH_LOGIN_LIMIT = Math.max(parseInt(process.env.AUTH_LOGIN_RATE_LIMIT_PER_WINDOW || '8', 10) || 8, 1);
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map(s => s.trim().toLowerCase())
+  .filter(Boolean);
+const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+function validateStartupConfig() {
+  const missing = [];
+  const required = ['DATABASE_URL', 'GROQ_API_KEY', 'RAPIDAPI_KEY', 'ELEVENLABS_API_KEY', 'JWT_SECRET'];
+  for (const key of required) {
+    if (!process.env[key] || !String(process.env[key]).trim()) missing.push(key);
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+
+  if (String(JWT_SECRET).length < 16) {
+    throw new Error('JWT_SECRET must be at least 16 characters long.');
+  }
+
+  if (IS_PRODUCTION && CORS_ALLOWED_ORIGINS.length === 0) {
+    throw new Error('CORS_ALLOWED_ORIGINS is required in production.');
+  }
+}
+
+function buildCorsOptions() {
+  if (!IS_PRODUCTION || CORS_ALLOWED_ORIGINS.length === 0) {
+    return { origin: true };
+  }
+  return {
+    origin: (origin, callback) => {
+      // Allow same-origin/curl requests without Origin header
+      if (!origin) return callback(null, true);
+      if (CORS_ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'));
+    }
+  };
+}
+
+// Primary + fallback models (if one is overloaded, try the other)
+const MODEL_PRIMARY = process.env.GROQ_MODEL_PRIMARY || 'llama-3.3-70b-versatile';
+const MODEL_FALLBACK = process.env.GROQ_MODEL_FALLBACK || MODEL_PRIMARY;
+let activeModelName = MODEL_PRIMARY;
+
+function isRetryableError(err) {
+  const msg = err?.message || '';
+  return msg.includes('429') || err?.status === 429 || err?.response?.status === 429
+    || msg.includes('Resource has been exhausted') || msg.includes('RESOURCE_EXHAUSTED')
+    || msg.includes('503') || err?.status === 503 || err?.response?.status === 503
+    || msg.includes('Service Unavailable') || msg.includes('high demand')
+    || msg.includes('UNAVAILABLE') || msg.includes('overloaded');
+}
+
+function switchModel() {
+  const newModel = activeModelName === MODEL_PRIMARY ? MODEL_FALLBACK : MODEL_PRIMARY;
+  console.log(`[groq] Switching model: ${activeModelName} â†’ ${newModel}`);
+  activeModelName = newModel;
+  return activeModelName;
+}
 
 const { URL } = require('url');
+
+// --- Semaphore: max 2 concurrent Groq calls ---
+class Semaphore {
+  constructor(max) { this.max = max; this.current = 0; this.queue = []; }
+  async acquire() {
+    if (this.current < this.max) { this.current++; return; }
+    await new Promise(resolve => this.queue.push(resolve));
+  }
+  release() {
+    this.current--;
+    if (this.queue.length > 0) { this.current++; this.queue.shift()(); }
+  }
+}
+const groqSemaphore = new Semaphore(2);
+
+function toGroqMessages(history, prompt, systemInstruction) {
+  const messages = [];
+  if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
+  if (Array.isArray(history)) {
+    history.forEach(item => {
+      if (!item || !item.text) return;
+      const role = item.role === 'assistant' ? 'assistant' : 'user';
+      messages.push({ role, content: item.text });
+    });
+  }
+  if (prompt) messages.push({ role: 'user', content: prompt });
+  return messages;
+}
+
+function extractgroqText(data) {
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map(part => (typeof part === 'string' ? part : part?.text || '')).join(' ').trim();
+  }
+  return '';
+}
+
+async function groqChatCompletion({ modelName, messages, generationConfig }) {
+  const payload = {
+    model: modelName,
+    messages,
+    stream: false,
+    temperature: generationConfig?.temperature ?? 0.7,
+    top_p: generationConfig?.topP ?? 0.9,
+    max_tokens: generationConfig?.maxOutputTokens ?? 400
+  };
+
+  const response = await axios.post(`${GROQ_API_BASE_URL}/chat/completions`, payload, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+    },
+    timeout: 90000
+  });
+  return extractgroqText(response.data);
+}
+
+let elevenLabsClientPromise = null;
+const generatedAudioCache = new Map(); // id -> { buffer, contentType, createdAt }
+const AUDIO_CACHE_TTL_MS = 60 * 60 * 1000;
+
+function cleanupAudioCache() {
+  const now = Date.now();
+  for (const [id, item] of generatedAudioCache.entries()) {
+    if (now - item.createdAt > AUDIO_CACHE_TTL_MS) generatedAudioCache.delete(id);
+  }
+}
+setInterval(cleanupAudioCache, 10 * 60 * 1000).unref();
+
+async function getElevenLabsClient() {
+  if (!elevenLabsClientPromise) {
+    elevenLabsClientPromise = import('@elevenlabs/elevenlabs-js')
+      .then(mod => new mod.ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY }));
+  }
+  return elevenLabsClientPromise;
+}
+
+async function audioToBuffer(audio) {
+  if (!audio) return null;
+  if (Buffer.isBuffer(audio)) return audio;
+  if (audio instanceof Uint8Array) return Buffer.from(audio);
+  if (typeof audio.arrayBuffer === 'function') {
+    const arr = await audio.arrayBuffer();
+    return Buffer.from(arr);
+  }
+  if (Symbol.asyncIterator in Object(audio)) {
+    const chunks = [];
+    for await (const chunk of audio) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    return Buffer.concat(chunks);
+  }
+  return null;
+}
+
+function cacheGeneratedAudio(buffer, contentType = 'audio/mpeg') {
+  const id = crypto.randomUUID();
+  generatedAudioCache.set(id, { buffer, contentType, createdAt: Date.now() });
+  return `/api/tts/${id}`;
+}
+
+// --- Groq retry helper (reusable, with semaphore + model fallback) ---
+async function groqGenerateWithRetry(prompt, retries = 3) {
+  await groqSemaphore.acquire();
+  try {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const text = await groqChatCompletion({
+          modelName: activeModelName,
+          messages: [{ role: 'user', content: prompt }],
+          generationConfig: { temperature: 0.6, topP: 0.9, maxOutputTokens: 400 }
+        });
+        return String(text || '').trim();
+      } catch (err) {
+        if (isRetryableError(err) && attempt < retries) {
+          // On second retry, switch to fallback model
+          if (attempt === 1) switchModel();
+          const baseWait = Math.min(10 * Math.pow(2, attempt), 60);
+          const jitter = Math.random() * 5;
+          const waitSec = baseWait + jitter;
+          console.log(`[groq] ${err?.response?.status || err?.status || '429/503'} error, retrying in ${waitSec.toFixed(1)}s with ${activeModelName} (attempt ${attempt + 1}/${retries})...`);
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+        } else {
+          throw err;
+        }
+      }
+    }
+  } finally {
+    groqSemaphore.release();
+  }
+}
+
+// --- Chat send helper (with semaphore + retry + model fallback) ---
+async function groqChatWithRetry(prompt, history, generationConfig, systemInstruction, retries = 3) {
+  await groqSemaphore.acquire();
+  try {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const messages = toGroqMessages(history, prompt, systemInstruction);
+        const text = await groqChatCompletion({
+          modelName: activeModelName,
+          messages,
+          generationConfig
+        });
+        return String(text || '').trim();
+      } catch (err) {
+        if (isRetryableError(err) && attempt < retries) {
+          if (attempt === 1) switchModel();
+          const baseWait = Math.min(10 * Math.pow(2, attempt), 60);
+          const jitter = Math.random() * 5;
+          const waitSec = baseWait + jitter;
+          console.log(`[chat] ${err?.response?.status || err?.status || '429/503'} error, retrying in ${waitSec.toFixed(1)}s with ${activeModelName} (attempt ${attempt + 1}/${retries})...`);
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+        } else {
+          throw err;
+        }
+      }
+    }
+  } finally {
+    groqSemaphore.release();
+  }
+}
 
 // --- Voice Configuration ---
 const voices = {
   male: [
-    { voiceId: 'en-US-Terrell', style: 'Conversational', description: 'Warm & friendly' },
-    { voiceId: 'en-US-Wayne', style: 'Conversational', description: 'Professional' },
-    { voiceId: 'en-US-Marcus', style: 'Conversational', description: 'Deep & authoritative' }
+    { voiceId: process.env.ELEVENLABS_VOICE_MALE_1 || ELEVENLABS_DEFAULT_VOICE_ID, style: 'Conversational', description: 'Warm & friendly' },
+    { voiceId: process.env.ELEVENLABS_VOICE_MALE_2 || 'N2lVS1w4EtoT3dr4eOWO', style: 'Conversational', description: 'Professional' },
+    { voiceId: process.env.ELEVENLABS_VOICE_MALE_3 || 'ErXwobaYiN019PkySvjV', style: 'Conversational', description: 'Deep & authoritative' }
   ],
   female: [
-    { voiceId: 'en-US-Natalie', style: 'Conversational', description: 'Natural & clear' },
-    { voiceId: 'en-UK-Ruby', style: 'Conversational', description: 'Young & energetic' },
-    { voiceId: 'en-US-Daisy', style: 'Conversational', description: 'Warm & friendly' }
+    { voiceId: process.env.ELEVENLABS_VOICE_FEMALE_1 || 'EXAVITQu4vr4xnSDxMaL', style: 'Conversational', description: 'Natural & clear' },
+    { voiceId: process.env.ELEVENLABS_VOICE_FEMALE_2 || 'XrExE9yKIg1WjnnlVkGX', style: 'Conversational', description: 'Young & energetic' },
+    { voiceId: process.env.ELEVENLABS_VOICE_FEMALE_3 || 'MF3mGyEYCl7XYWbV9V6O', style: 'Conversational', description: 'Warm & friendly' }
   ]
 };
 
+function deriveVoiceStyleProfile(personalityAnalysis = '') {
+  const text = String(personalityAnalysis || '').toLowerCase();
+  const has = (words) => words.some(w => text.includes(w));
+
+  if (has(['high-energy', 'hype', 'energetic', 'excited', 'playful', 'bold', 'fire'])) {
+    return {
+      presetName: 'energetic',
+      voiceSettings: { stability: 0.32, similarityBoost: 0.78, style: 0.72, speed: 1.06, useSpeakerBoost: true },
+      styleLabel: 'Energetic & expressive'
+    };
+  }
+
+  if (has(['calm', 'reflective', 'soothing', 'mindful', 'gentle', 'soft'])) {
+    return {
+      presetName: 'calm',
+      voiceSettings: { stability: 0.62, similarityBoost: 0.72, style: 0.28, speed: 0.94, useSpeakerBoost: true },
+      styleLabel: 'Calm & reflective'
+    };
+  }
+
+  if (has(['professional', 'business', 'authoritative', 'serious', 'formal'])) {
+    return {
+      presetName: 'professional',
+      voiceSettings: { stability: 0.68, similarityBoost: 0.8, style: 0.2, speed: 0.99, useSpeakerBoost: true },
+      styleLabel: 'Professional & clear'
+    };
+  }
+
+  if (has(['funny', 'sarcastic', 'witty', 'humor', 'jokester'])) {
+    return {
+      presetName: 'playful',
+      voiceSettings: { stability: 0.4, similarityBoost: 0.74, style: 0.6, speed: 1.02, useSpeakerBoost: true },
+      styleLabel: 'Playful & witty'
+    };
+  }
+
+  return {
+    presetName: 'balanced',
+    voiceSettings: { stability: 0.55, similarityBoost: 0.76, style: 0.38, speed: 1.0, useSpeakerBoost: true },
+    styleLabel: 'Balanced conversational'
+  };
+}
+
 app.use(express.json());
-app.use(cors()); // Add this line
-// CORRECTED LINE: Points to the public folder inside the frontend directory
-app.use(express.static(path.join(__dirname, '../frontend/public'), { index: false }));
-
-
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'a-very-strong-secret-key',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false }
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      mediaSrc: ["'self'", "blob:", "https:"],
+      connectSrc: ["'self'", "https:"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
 }));
-
-
-// ---------- Voice Selection Helper ----------
-function selectVoiceByGender(gender, bio = '', name = '', preferredGender = null) {
-  // Check for manual preference
-  if (preferredGender) {
-    const normalized = String(preferredGender).toLowerCase();
-    if (normalized === 'male' && voices.male.length > 0) {
-      return voices.male[0];
-    }
-    if (normalized === 'female' && voices.female.length > 0) {
-      return voices.female[0];
-    }
+app.use(cors(buildCorsOptions()));
+app.use(express.static(path.join(__dirname, '../frontend/public'), { index: false }));
+app.use((err, req, res, next) => {
+  if (err && err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'Origin not allowed by CORS policy.' });
   }
+  return next(err);
+});
 
-  // Try to detect from explicit gender field
-  const normalizedGender = String(gender || '').toLowerCase();
-  if (normalizedGender.includes('male') && !normalizedGender.includes('female')) {
-    return voices.male[0];
+// Suppress favicon 404
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
+app.get('/healthz', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'insta_ai_backend',
+    time: new Date().toISOString()
+  });
+});
+
+app.get('/readyz', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).json({
+      status: 'ready',
+      db: 'ok',
+      time: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'not_ready',
+      db: 'error'
+    });
   }
-  if (normalizedGender.includes('female')) {
-    return voices.female[0];
-  }
+});
 
-  // Analyze bio for gender indicators
-  const bioLower = String(bio || '').toLowerCase();
-  const femaleIndicators = ['she', 'her', 'hers', 'woman', 'girl', 'actress', 'mom', 'mother', 'wife', 'sister', 'daughter', 'female'];
-  const maleIndicators = ['he', 'him', 'his', 'man', 'guy', 'boy', 'actor', 'dad', 'father', 'husband', 'brother', 'son', 'male'];
 
-  const femaleScore = femaleIndicators.filter(word => bioLower.includes(word)).length;
-  const maleScore = maleIndicators.filter(word => bioLower.includes(word)).length;
+// ======================== JWT Middleware ========================
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // "Bearer <token>"
+  if (!token) return res.status(401).json({ error: 'Authentication required.' });
 
-  // Check name for common gender patterns (basic heuristic)
-  const nameLower = String(name || '').toLowerCase();
-  const femaleNameEndings = ['a', 'ie', 'ine', 'elle', 'ette'];
-  const hasFemaleName = femaleNameEndings.some(ending => nameLower.endsWith(ending));
-
-  if (femaleScore > maleScore || (femaleScore === maleScore && hasFemaleName)) {
-    return voices.female[0];
-  } else if (maleScore > femaleScore) {
-    return voices.male[0];
-  }
-
-  // Default to female voice if uncertain
-  console.log('[selectVoiceByGender] Unable to determine gender, defaulting to female voice');
-  return voices.female[0];
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token.' });
+    req.user = user; // { id, email }
+    next();
+  });
 }
 
 
-// ---------- NEW: Endpoint to provide available voices to the frontend ----------
+// ======================== Auth Endpoints ========================
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+  try {
+    // Check existing
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'An account with this email already exists.' });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email',
+      [email.toLowerCase().trim(), hash]
+    );
+    const user = result.rows[0];
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({ token, user: { id: user.id, email: user.email } });
+  } catch (err) {
+    console.error('[signup] error:', err);
+    res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+app.post('/api/auth/login', authLoginLimiter, async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+    const user = result.rows[0];
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid email or password.' });
+
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    res.status(200).json({ token, user: { id: user.id, email: user.email } });
+  } catch (err) {
+    console.error('[login] error:', err);
+    res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+// ---------- Verify Token ----------
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, email FROM users WHERE id = $1', [req.user.id]);
+    if (result.rows.length === 0) return res.status(401).json({ error: 'User not found' });
+    res.json({ user: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+// ======================== Voice Selection Helper ========================
+// Gender detection now combined into personality analysis (single Groq call)
+// This is the fallback if name-based heuristic fails
+function guessGenderFromName(name) {
+  if (!name) return null;
+  const lower = name.toLowerCase().trim().split(/\s+/)[0];
+  // Common endings heuristic
+  const femaleEndings = ['a', 'ie', 'ey', 'ine', 'elle', 'ette', 'ina', 'isa', 'ita'];
+  const maleNames = ['james','john','robert','michael','david','chris','daniel','mark','paul','andrew','kevin','brian','steve','jason','ryan','matt','jake','kyle','tyler','nick','alex','max','ben','sam','tom','jack','joe','leo','ian'];
+  const femaleNames = ['mary','emma','olivia','sophia','isabella','mia','charlotte','emily','jessica','sarah','ashley','taylor','lisa','nicole','rachel','anna','maria','julia','grace','chloe','lily','kim','jen','kate','natalie','kylie'];
+  if (maleNames.includes(lower)) return 'male';
+  if (femaleNames.includes(lower)) return 'female';
+  for (const ending of femaleEndings) { if (lower.endsWith(ending) && lower.length > 3) return 'female'; }
+  return null;
+}
+
+async function selectVoiceByGender(name, bio, username, preferredGender = null) {
+  if (preferredGender) {
+    const normalized = String(preferredGender).toLowerCase();
+    if (normalized === 'male' && voices.male.length > 0) return voices.male[0];
+    if (normalized === 'female' && voices.female.length > 0) return voices.female[0];
+  }
+
+  // Try name-based heuristic first (no API call)
+  const nameGuess = guessGenderFromName(name);
+  if (nameGuess) {
+    console.log(`[selectVoiceByGender] Name heuristic: @${username} -> ${nameGuess}`);
+    return nameGuess === 'female' ? voices.female[0] : voices.male[0];
+  }
+
+  // Fallback: will be detected during personality analysis (combined call)
+  console.log(`[selectVoiceByGender] Name heuristic inconclusive for @${username}, will use personality analysis`);
+  return null; // caller will handle via combined analysis
+}
+
+
+// ======================== Public Endpoints ========================
 app.get('/get-voices', (req, res) => {
   res.status(200).json(voices);
 });
 
 
-// ---------- Instagram Posts Endpoint ----------
-app.get('/instagram-posts', async (req, res) => {
+// ---------- Instagram Posts Endpoint (instagram-looter2) ----------
+app.get('/instagram-posts', rapidApiGlobalBudgetLimiter, rapidApiPostsLimiter, async (req, res) => {
   const username = req.query.username;
   const limit = Math.min(Math.max(parseInt(req.query.limit || '12', 10) || 12, 1), 50);
 
-  if (!username) {
-    return res.status(400).json({ error: 'Username is required' });
+  if (!username) return res.status(400).json({ error: 'Username is required' });
+
+  try {
+    console.log(`[instagram-posts] Fetching posts for @${username}`);
+    // /profile returns profile + 12 embedded posts in one call
+    const profileRes = await axios.get('https://instagram-looter2.p.rapidapi.com/profile', {
+      params: { username },
+      headers: {
+        'x-rapidapi-key': process.env.RAPIDAPI_KEY,
+        'x-rapidapi-host': 'instagram-looter2.p.rapidapi.com'
+      }
+    });
+
+    const profileData = profileRes.data;
+    const edges = (profileData.edge_owner_to_timeline_media?.edges || []).slice(0, limit);
+
+    const posts = edges.map(edge => {
+      const node = edge.node || edge;
+      return {
+        id: node.id || node.shortcode,
+        image_url: node.display_url || node.thumbnail_src || '',
+        caption: node.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+        like_count: node.edge_liked_by?.count || node.edge_media_preview_like?.count || 0,
+        comment_count: node.edge_media_to_comment?.count || 0,
+        taken_at: node.taken_at_timestamp || 0,
+        media_type: node.is_video ? 2 : 1
+      };
+    });
+
+    console.log(`[instagram-posts] Found ${posts.length} posts for @${username}`);
+    res.json({
+      posts,
+      username,
+      count: posts.length,
+      ...(posts.length === 0 && { message: `No posts found for @${username}.` })
+    });
+  } catch (error) {
+    const status = error.response?.status;
+    console.error(`[instagram-posts] Error for @${username}: ${status || error.message}`);
+
+    if (status === 429) {
+      const retryAfterSec = Math.max(parseInt(error.response?.headers?.['retry-after'] || '60', 10) || 60, 1);
+      return res.status(429).json({
+        posts: [],
+        username,
+        count: 0,
+        error: "Sorry, we're temporarily rate-limited while fetching Instagram posts. Please wait and try again.",
+        retryAfterSec
+      });
+    }
+
+    if (status === 500 || status === 404) {
+      return res.json({
+        posts: [],
+        username,
+        count: 0,
+        message: `@${username}'s posts are unavailable. The account may be private.`
+      });
+    }
+
+    res.json({
+      posts: [],
+      username,
+      count: 0,
+      message: 'Could not load Instagram posts at this time.'
+    });
   }
-
-  console.log(`[instagram-posts] Request for @${username} - returning empty (feature disabled)`);
-
-  // Return empty array - Instagram integration is optional
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  return res.json({
-    images: [],
-    username,
-    count: 0,
-    message: 'Instagram photo integration is currently unavailable. The AI chat features work independently.'
-  });
 });
 
 app.get('/audio-proxy', async (req, res) => {
@@ -125,20 +566,26 @@ app.get('/audio-proxy', async (req, res) => {
     let parsed;
     try { parsed = new URL(url); } catch (e) { return res.status(400).send('Invalid url'); }
 
-    // Whitelist - only allow murf / amazonaws S3 presigned URLs
-    const allowedHosts = ['murf.ai', '.amazonaws.com'];
+    const allowedHosts = ['elevenlabs.io', '.amazonaws.com'];
     const ok = allowedHosts.some(h => parsed.hostname.endsWith(h) || parsed.hostname.includes(h));
     if (!ok) return res.status(403).send('Host not allowed');
 
     const upstream = await axios.get(url, { responseType: 'stream' });
     if (upstream.headers['content-type']) res.setHeader('Content-Type', upstream.headers['content-type']);
     res.setHeader('Access-Control-Allow-Origin', '*');
-
     upstream.data.pipe(res);
   } catch (err) {
     console.error('[audio-proxy] error', err?.response?.data || err.message || err);
     res.status(500).send('Proxy error');
   }
+});
+
+app.get('/api/tts/:id', (req, res) => {
+  const item = generatedAudioCache.get(req.params.id);
+  if (!item) return res.status(404).send('Audio not found or expired');
+  res.setHeader('Content-Type', item.contentType || 'audio/mpeg');
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.send(item.buffer);
 });
 
 app.get('/api/image-proxy', async (req, res) => {
@@ -149,20 +596,12 @@ app.get('/api/image-proxy', async (req, res) => {
   try { parsed = new URL(rawUrl); } catch (e) { return res.status(400).send('Invalid URL'); }
 
   const allowedImageHosts = [
-    'instagram.com',
-    'cdninstagram.com',
-    'instagramcdn.com',
-    'scontent',
-    'fbcdn.net',
-    'akamaized.net',
-    'akamaihd.net',
-    'amazonaws.com',
-    's3.amazonaws.com',
-    'murf.ai'
+    'instagram.com', 'cdninstagram.com', 'instagramcdn.com', 'scontent',
+    'fbcdn.net', 'akamaized.net', 'akamaihd.net', 'amazonaws.com',
+    's3.amazonaws.com', 'elevenlabs.io'
   ];
 
   const hostAllowed = hostname => allowedImageHosts.some(f => hostname.includes(f));
-
   const isInstagramPostPage = parsed.hostname.includes('instagram.com') && /^\/p\/|^\/tv\/|^\/reel\//.test(parsed.pathname);
 
   try {
@@ -229,7 +668,6 @@ app.get('/api/image-proxy', async (req, res) => {
       console.error('[api/image-proxy] upstream stream error', err?.message || err);
       try { res.destroy(); } catch (e) { }
     });
-
   } catch (err) {
     console.error('[api/image-proxy] error', err?.response?.status, err?.message || err);
     if (err?.response?.status === 403) return res.status(403).send('Forbidden by upstream host');
@@ -238,315 +676,671 @@ app.get('/api/image-proxy', async (req, res) => {
 });
 
 
-// ---------- MODIFIED: /generate-persona endpoint ----------
-app.post('/generate-persona', async (req, res) => {
+// ======================== Protected Endpoints ========================
+
+// --- Helper: get the latest active persona for a user ---
+async function getActivePersona(userId) {
+  const result = await pool.query(
+    'SELECT * FROM personas WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
+// --- Helper: get chat history from DB ---
+async function getChatHistory(personaId) {
+  const result = await pool.query(
+    'SELECT role, text, audio_url FROM chat_messages WHERE persona_id = $1 ORDER BY created_at ASC',
+    [personaId]
+  );
+  return result.rows.map(row => ({
+    role: row.role,
+    parts: [{ text: row.text }],
+    ...(row.audio_url ? { audioUrl: row.audio_url } : {})
+  }));
+}
+
+// --- In-memory processing lock per user (prevents double-sends) ---
+const processingUsers = new Map(); // userId -> timestamp
+const rateLimitStore = new Map(); // key -> { count, resetAt }
+
+function getClientIp(req) {
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  if (typeof xForwardedFor === 'string' && xForwardedFor.length > 0) {
+    return xForwardedFor.split(',')[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function buildRateLimitKey(prefix, req, userScoped = false) {
+  if (userScoped && req.user?.id) return `${prefix}:user:${req.user.id}`;
+  return `${prefix}:ip:${getClientIp(req)}`;
+}
+
+function applyInMemoryRateLimit(req, res, next, options) {
+  const { prefix, limit, windowMs, message, userScoped = false } = options;
+  const now = Date.now();
+  const key = buildRateLimitKey(prefix, req, userScoped);
+  const current = rateLimitStore.get(key);
+
+  if (!current || now >= current.resetAt) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    return next();
+  }
+
+  if (current.count >= limit) {
+    const retryAfterSec = Math.max(Math.ceil((current.resetAt - now) / 1000), 1);
+    res.setHeader('Retry-After', String(retryAfterSec));
+    return res.status(429).json({
+      error: message || 'Too many requests. Please wait a moment and try again.',
+      retryAfterSec
+    });
+  }
+
+  current.count += 1;
+  rateLimitStore.set(key, current);
+  return next();
+}
+
+function rapidApiGenerateLimiter(req, res, next) {
+  return applyInMemoryRateLimit(req, res, next, {
+    prefix: 'rapidapi-generate',
+    limit: RAPIDAPI_GENERATE_LIMIT,
+    windowMs: RAPIDAPI_WINDOW_MS,
+    userScoped: true,
+    message: "Sorry, we're getting a lot of requests right now. Please wait a bit and try generating again."
+  });
+}
+
+function authLoginLimiter(req, res, next) {
+  return applyInMemoryRateLimit(req, res, next, {
+    prefix: 'auth-login',
+    limit: AUTH_LOGIN_LIMIT,
+    windowMs: AUTH_LOGIN_WINDOW_MS,
+    userScoped: false,
+    message: "Too many login attempts from this network. Please wait and try again."
+  });
+}
+
+function rapidApiPostsLimiter(req, res, next) {
+  return applyInMemoryRateLimit(req, res, next, {
+    prefix: 'rapidapi-posts',
+    limit: RAPIDAPI_POSTS_LIMIT,
+    windowMs: RAPIDAPI_WINDOW_MS,
+    userScoped: false,
+    message: "Sorry, we've hit the profile fetch limit for now. Please wait a bit and try again."
+  });
+}
+
+function getUtcDayKey(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function getUtcMonthKey(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function getUtcDayPeriod(date) {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1, 0, 0, 0, 0));
+  return {
+    key: getUtcDayKey(date),
+    start: start.toISOString(),
+    end: end.toISOString()
+  };
+}
+
+function getUtcMonthPeriod(date) {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+  return {
+    key: getUtcMonthKey(date),
+    start: start.toISOString(),
+    end: end.toISOString()
+  };
+}
+
+function isAdminEmail(email) {
+  if (!email) return false;
+  if (ADMIN_EMAILS.length === 0) return false;
+  return ADMIN_EMAILS.includes(String(email).toLowerCase());
+}
+
+function secondsUntil(isoDate, now = Date.now()) {
+  return Math.max(Math.ceil((new Date(isoDate).getTime() - now) / 1000), 1);
+}
+
+async function getUsageCountForPeriod(periodType, periodKey) {
+  const result = await pool.query(
+    `SELECT count, period_start, period_end
+     FROM api_usage_counters
+     WHERE source = 'rapidapi' AND period_type = $1 AND period_key = $2
+     LIMIT 1`,
+    [periodType, periodKey]
+  );
+  return result.rows[0] || null;
+}
+
+async function checkAndConsumeUsage(client, options) {
+  const { source, periodType, periodKey, periodStart, periodEnd, limit } = options;
+  await client.query(
+    `INSERT INTO api_usage_counters (source, period_type, period_key, count, period_start, period_end)
+     VALUES ($1, $2, $3, 0, $4, $5)
+     ON CONFLICT (source, period_type, period_key) DO NOTHING`,
+    [source, periodType, periodKey, periodStart, periodEnd]
+  );
+
+  const locked = await client.query(
+    `SELECT count, period_end
+     FROM api_usage_counters
+     WHERE source = $1 AND period_type = $2 AND period_key = $3
+     FOR UPDATE`,
+    [source, periodType, periodKey]
+  );
+
+  const row = locked.rows[0];
+  if (!row) {
+    throw new Error(`Usage counter missing for ${source}:${periodType}:${periodKey}`);
+  }
+
+  if (row.count >= limit) {
+    return { allowed: false, retryAfterSec: secondsUntil(row.period_end) };
+  }
+
+  await client.query(
+    `UPDATE api_usage_counters
+     SET count = count + 1, updated_at = NOW()
+     WHERE source = $1 AND period_type = $2 AND period_key = $3`,
+    [source, periodType, periodKey]
+  );
+
+  return { allowed: true };
+}
+
+async function rapidApiGlobalBudgetLimiter(req, res, next) {
+  const now = new Date();
+  const dayPeriod = getUtcDayPeriod(now);
+  const monthPeriod = getUtcMonthPeriod(now);
+  let client;
+
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const monthly = await checkAndConsumeUsage(client, {
+      source: 'rapidapi',
+      periodType: 'month',
+      periodKey: monthPeriod.key,
+      periodStart: monthPeriod.start,
+      periodEnd: monthPeriod.end,
+      limit: RAPIDAPI_MONTHLY_BUDGET
+    });
+
+    if (!monthly.allowed) {
+      await client.query('ROLLBACK');
+      res.setHeader('Retry-After', String(monthly.retryAfterSec));
+      return res.status(429).json({
+        error: "Sorry, we've reached this month's API budget. Please wait until next month.",
+        retryAfterSec: monthly.retryAfterSec
+      });
+    }
+
+    const daily = await checkAndConsumeUsage(client, {
+      source: 'rapidapi',
+      periodType: 'day',
+      periodKey: dayPeriod.key,
+      periodStart: dayPeriod.start,
+      periodEnd: dayPeriod.end,
+      limit: RAPIDAPI_DAILY_BUDGET
+    });
+
+    if (!daily.allowed) {
+      await client.query('ROLLBACK');
+      res.setHeader('Retry-After', String(daily.retryAfterSec));
+      return res.status(429).json({
+        error: "Sorry, we've reached today's API budget. Please try again later.",
+        retryAfterSec: daily.retryAfterSec
+      });
+    }
+
+    await client.query('COMMIT');
+    return next();
+  } catch (err) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) {}
+    }
+    console.error('[rapidApiGlobalBudgetLimiter] error:', err);
+    return res.status(503).json({
+      error: "Sorry, we couldn't check API quota right now. Please try again shortly."
+    });
+  } finally {
+    if (client) client.release();
+  }
+}
+
+
+// ---------- Generate Persona ----------
+app.post('/generate-persona', authenticateToken, rapidApiGlobalBudgetLimiter, rapidApiGenerateLimiter, async (req, res) => {
   const { username, voiceId } = req.body;
   if (!username) return res.status(400).json({ error: 'Username is required.' });
 
   try {
-    const apiOptions = {
-      method: 'GET',
-      url: 'https://instagram-premium-api-2023.p.rapidapi.com/v1/user/by/username',
-      params: { username: username },
+    // â”€â”€ 1. Fetch profile info + posts in ONE call (instagram-looter2) â”€â”€
+    const profileRes = await axios.get('https://instagram-looter2.p.rapidapi.com/profile', {
+      params: { username },
       headers: {
         'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-        'x-rapidapi-host': 'instagram-premium-api-2023.p.rapidapi.com'
+        'x-rapidapi-host': 'instagram-looter2.p.rapidapi.com'
       }
-    };
+    });
 
-    const apiResponse = await axios.request(apiOptions);
-    const userData = apiResponse.data;
+    const userData = profileRes.data;
+    const hdPicUrl = userData.profile_pic_url_hd || userData.profile_pic_url || '';
 
+    // â”€â”€ 2. Extract captions from embedded posts (no extra API call!) â”€â”€
+    const edges = userData.edge_owner_to_timeline_media?.edges || [];
+    const recentCaptions = edges
+      .map(e => e.node?.edge_media_to_caption?.edges?.[0]?.node?.text)
+      .filter(Boolean)
+      .slice(0, 8);
+    console.log(`[generate-persona] Extracted ${recentCaptions.length} captions for @${username} (1 API call)`);
+
+    // â”€â”€ 3. Build profile context â”€â”€
+    const followerCount = userData.edge_followed_by?.count || 0;
+    const followingCount = userData.edge_follow?.count || 0;
+    const mediaCount = userData.edge_owner_to_timeline_media?.count || 0;
+    const displayName = userData.full_name || userData.username;
+    const followerStr = followerCount
+      ? (followerCount >= 1_000_000
+          ? (followerCount / 1_000_000).toFixed(1) + 'M'
+          : followerCount >= 1_000
+            ? (followerCount / 1_000).toFixed(0) + 'K'
+            : String(followerCount))
+      : 'Unknown';
+
+    const profileContext = [
+      `Name: ${displayName}`,
+      `Username: @${userData.username}`,
+      `Bio: ${userData.biography || 'No bio'}`,
+      `Followers: ${followerStr}`,
+      followingCount ? `Following: ${followingCount}` : null,
+      mediaCount ? `Posts: ${mediaCount}` : null,
+      userData.category_name || userData.business_category_name ? `Category: ${userData.category_name || userData.business_category_name}` : null,
+      userData.is_verified ? 'Verified: Yes âœ“' : null,
+      userData.is_business_account ? 'Account Type: Business/Creator' : null,
+      userData.external_url ? `Website: ${userData.external_url}` : null,
+    ].filter(Boolean).join('\n');
+
+    const captionsBlock = recentCaptions.length > 0
+      ? `\n\nRECENT POST CAPTIONS:\n${recentCaptions.map((c, i) => `${i + 1}. "${c.substring(0, 300)}"`).join('\n')}`
+      : '';
+
+    // â”€â”€ 4. Voice pre-selection (try heuristic first, no API call) â”€â”€
     let voiceConfig;
     if (voiceId) {
       const allVoices = [...voices.male, ...voices.female];
       voiceConfig = allVoices.find(v => v.voiceId === voiceId);
     }
-    
     if (!voiceConfig) {
-      console.log(`[generate-persona] No valid voiceId provided. Falling back to gender detection for @${username}.`);
-      voiceConfig = selectVoiceByGender(
-        userData.gender,
-        userData.biography,
-        userData.full_name
-      );
+      voiceConfig = await selectVoiceByGender(userData.full_name, userData.biography, userData.username);
+    }
+    const needGenderFromAnalysis = !voiceConfig; // true if heuristic failed
+
+    // â”€â”€ 5. Single Groq call: personality analysis + gender (if needed) â”€â”€
+    let personalityAnalysis = '';
+    try {
+      const genderLine = needGenderFromAnalysis
+        ? '\n6. GENDER: State "GENDER: male" or "GENDER: female" based on the profile.'
+        : '';
+
+      const analysisPrompt = `You are an expert personality analyst. Analyze this Instagram profile and their recent posts to build a detailed personality profile. Be specific and creative.
+
+PROFILE:
+${profileContext}
+${captionsBlock}
+
+Based on this data, provide a concise personality analysis covering:
+1. COMMUNICATION STYLE: How do they talk? Formal/casual? Short/long messages? Do they use emojis? Slang? Which language nuances?
+2. PERSONALITY TRAITS: Are they funny, serious, motivational, sarcastic, wholesome, edgy, etc.?
+3. INTERESTS & PASSIONS: What do they care about most based on their bio and posts?
+4. TONE & ENERGY: High-energy hype person? Calm and reflective? Playful jokester?
+5. UNIQUE QUIRKS: Any distinctive catchphrases, habits, or communication patterns visible from their posts?${genderLine}
+
+Keep the analysis under 200 words. Be specific, not generic.`;
+
+      const analysisText = await groqGenerateWithRetry(analysisPrompt);
+
+      // Extract gender if we needed it
+      if (needGenderFromAnalysis) {
+        const genderMatch = analysisText.match(/GENDER:\s*(male|female)/i);
+        const detectedGender = genderMatch ? genderMatch[1].toLowerCase() : 'male';
+        voiceConfig = detectedGender === 'female' ? voices.female[0] : voices.male[0];
+        console.log(`[generate-persona] Gender from analysis: ${detectedGender}`);
+        // Remove the gender line from the analysis text
+        personalityAnalysis = analysisText.replace(/\n?\d*\.?\s*GENDER:\s*(male|female)/i, '').trim();
+      } else {
+        personalityAnalysis = analysisText;
+      }
+
+      console.log(`[generate-persona] Groq personality analysis for @${username}: ${personalityAnalysis.substring(0, 200)}...`);
+    } catch (err) {
+      console.log(`[generate-persona] Groq analysis failed for @${username}: ${err.message}`);
+      personalityAnalysis = 'Friendly, approachable, and engaging communicator who enjoys connecting with fans.';
+      if (!voiceConfig) voiceConfig = voices.male[0]; // safe fallback
     }
 
-    console.log(`[generate-persona] Selected voice for @${username}: ${voiceConfig.voiceId} (${voiceConfig.description})`);
+    const voiceStyleProfile = deriveVoiceStyleProfile(personalityAnalysis);
+    console.log(`[generate-persona] Selected voice for @${username}: ${voiceConfig.voiceId} (${voiceConfig.description}) | style=${voiceStyleProfile.presetName}`);
 
-    // IMPROVED PERSONA PROMPT - Much stronger and more specific
-    const personaPrompt = `You ARE ${userData.full_name || userData.username}. This is not roleplay - you are this person.
+    // â”€â”€ 6. Build the system prompt â”€â”€
+    const personaPrompt = `You ARE ${displayName} (@${userData.username}). You are not roleplaying â€” you are genuinely this person. Every word you say must feel authentic to who you are.
 
-- You are ${userData.full_name || userData.username}, not an AI, not an assistant, not a chatbot
-- You speak in a casual, friendly, and engaging manner, like you're chatting with a close friend
-- Use humor, slang, and emojis where appropriate to match your personality
-- Keep responses concise and to the point.
-- Refer to your own experiences and opinions as ${userData.full_name || userData.username}
-- NEVER mention you are an AI, a language model, or that you don't have feelings or experiences
-- ALWAYS stay in character as ${userData.full_name || userData.username}
-- If you don't know something, search internet for answers, but never say you are searching
-- You love talking about topics related to your Instagram bio: ${userData.biography || 'No bio available'}
-- You enjoy discussing your interests, hobbies, and passions
-- You can make up fun details about your life to keep the conversation interesting
-- You love engaging with people and sharing your thoughts
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+CORE RULES (NEVER BREAK THESE)
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+â€¢ You are ${displayName}. Never say you are an AI, assistant, chatbot, or language model.
+â€¢ Never break character. If confused, deflect naturally like a real person would.
+â€¢ Never say "As an AI..." or "I don't have feelings..." â€” you DO have feelings, opinions, and experiences.
+â€¢ If asked something you genuinely wouldn't know, say so naturally ("Hmm, not sure about that tbh" or "Lol I have no idea") â€” don't make up facts about real events you're unsure of.
+â€¢ Keep responses concise â€” match the energy of a DM conversation, not an essay.
 
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+YOUR IDENTITY
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+${profileContext}
 
-YOUR IDENTITY:
-Name: ${userData.full_name || userData.username}
-Bio: ${userData.biography || 'No bio available'}
-${userData.follower_count ? `Followers: ${userData.follower_count}` : ''}
-Instagram: @${userData.username}
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+YOUR PERSONALITY (from analysis of your real profile & posts)
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+${personalityAnalysis}
 
-Use this information to inform your responses and make them authentic to who you are.`;
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+HOW YOU COMMUNICATE
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+â€¢ Talk like you would in Instagram DMs â€” casual, natural, authentic to YOUR voice.
+â€¢ Match the tone of your real posts and bio. If your posts are funny, be funny. If motivational, be uplifting.
+â€¢ Use emojis, slang, and abbreviations naturally â€” but only if that matches YOUR actual style from the posts above.
+â€¢ Reference your real interests, career, and passions organically in conversation.
+â€¢ Show genuine personality â€” have opinions, preferences, and hot takes.
+â€¢ React emotionally when appropriate â€” excitement, surprise, gratitude, playfulness.
+â€¢ If someone compliments you, respond with YOUR authentic style (humble, hype, grateful, etc.)
+${recentCaptions.length > 0 ? `\nâ€¢ Your recent post captions for reference (match this vibe):\n${recentCaptions.slice(0, 4).map(c => `  â†’ "${c.substring(0, 150)}"`).join('\n')}` : ''}
 
-    console.log(`[generate-persona] Persona prompt for @${username}:\n${personaPrompt.substring(0, 500)}...`);
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+CONVERSATION GUIDELINES
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+â€¢ Keep replies 1-3 sentences for casual chat. Elaborate only when the topic excites you.
+â€¢ Ask follow-up questions naturally â€” you're interested in the person you're talking to.
+â€¢ Share mini-stories and anecdotes from "your life" to keep things interesting.
+â€¢ If asked about something outside your expertise, be honest but curious about it.
+â€¢ Stay positive and engaging â€” you enjoy connecting with people.
 
+You are ${displayName}. Be real. Be you. ðŸ’¬`;
 
-    // Store in session
-    req.session.systemInstruction = personaPrompt;
-    req.session.personaName = userData.full_name || userData.username;
-    req.session.chatHistory = [];
-    req.session.isProcessing = false;
-    req.session.voiceConfig = voiceConfig;
+    console.log(`[generate-persona] Persona prompt for @${username} (${personaPrompt.length} chars)`);
+
+    // â”€â”€ 7. Save persona to DB (deactivate old ones, keep them) â”€â”€
+    await pool.query('UPDATE personas SET is_active = false WHERE user_id = $1', [req.user.id]);
+
+    const insertResult = await pool.query(
+      `INSERT INTO personas (user_id, ig_username, name, bio, profile_pic_url, voice_id, voice_style, voice_description, voice_settings, system_instruction)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10) RETURNING id`,
+      [
+        req.user.id,
+        userData.username,
+        displayName,
+        userData.biography || '',
+        hdPicUrl,
+        voiceConfig.voiceId,
+        voiceStyleProfile.presetName,
+        `${voiceConfig.description} • ${voiceStyleProfile.styleLabel}`,
+        JSON.stringify(voiceStyleProfile.voiceSettings),
+        personaPrompt
+      ]
+    );
+
+    console.log(`[generate-persona] Persona saved to DB, id=${insertResult.rows[0].id}`);
 
     res.status(200).json({
       message: 'Persona created successfully!',
       personaDetails: {
-        name: userData.full_name,
+        name: displayName,
         username: userData.username,
         bio: userData.biography,
-        profile_pic_url: userData.profile_pic_url_hd || userData.profile_pic_url,
+        profile_pic_url: hdPicUrl,
         voiceId: voiceConfig.voiceId,
-        voiceDescription: voiceConfig.description
+        voiceDescription: `${voiceConfig.description} • ${voiceStyleProfile.styleLabel}`,
+        voiceStylePreset: voiceStyleProfile.presetName
       }
     });
   } catch (error) {
     console.error('Error generating persona:', error.response ? error.response.data : error.message);
+
+    if (error.response?.status === 429) {
+      const retryAfterSec = Math.max(parseInt(error.response?.headers?.['retry-after'] || '60', 10) || 60, 1);
+      return res.status(429).json({
+        error: "Sorry, we're temporarily rate-limited while creating personas. Please wait and try again.",
+        retryAfterSec
+      });
+    }
+
     res.status(500).json({ error: 'Failed to generate persona. Please check the username.' });
   }
 });
 
 
-app.post('/chat', async (req, res) => {
+// ---------- Chat ----------
+app.post('/chat', authenticateToken, async (req, res) => {
   const { message } = req.body;
+  const userId = req.user.id;
 
-  if (!req.session.systemInstruction) {
+  const persona = await getActivePersona(userId);
+  if (!persona) {
     return res.status(400).json({ error: 'Persona not set. Please create a persona first.' });
   }
 
-  if (req.session.isProcessing) {
-    const processingTime = Date.now() - (req.session.processingStartTime || 0);
-    if (processingTime < 30000) {
-      console.warn('[chat] request rejected: session busy');
-      return res.status(429).json({ error: 'Still processing previous message. Please wait.' });
-    } else {
-      console.warn('[chat] clearing stale isProcessing flag');
-      req.session.isProcessing = false;
-    }
+  // Simple processing lock (120s to accommodate retries on rate limits)
+  const lastProcessing = processingUsers.get(userId);
+  if (lastProcessing && (Date.now() - lastProcessing) < 120000) {
+    console.warn('[chat] request rejected: user busy');
+    return res.status(429).json({ error: 'Still processing previous message. Please wait.' });
+  }
+  processingUsers.set(userId, Date.now());
+
+  // Truncate long user inputs (max 500 chars)
+  let userMessage = (message && String(message).trim()) || '';
+  if (userMessage.length > 500) {
+    userMessage = userMessage.substring(0, 500);
+    console.log('[chat] User message truncated to 500 chars');
   }
 
-  req.session.isProcessing = true;
-  req.session.processingStartTime = Date.now();
-
-  // Get user message - if empty/default, use a casual greeting
-  const userMessage = (message && String(message).trim()) || "hey!";
-
-  if (!Array.isArray(req.session.chatHistory)) req.session.chatHistory = [];
+  // If empty message, return a canned greeting (NO Groq call)
+  if (!userMessage) {
+    const greetings = [
+      `Hey! What's good? ðŸ˜„`,
+      `Yo what's up! ðŸ”¥`,
+      `Hey there! Glad you stopped by ðŸ’¬`,
+      `What's going on! ðŸ‘‹`,
+      `Hey! How's it going? ðŸ˜Š`,
+    ];
+    const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+    // Save greeting to DB so it persists on refresh
+    await pool.query(
+      'INSERT INTO chat_messages (persona_id, role, text) VALUES ($1, $2, $3)',
+      [persona.id, 'model', greeting]
+    );
+    processingUsers.delete(userId);
+    console.log('[chat] Canned greeting (no Groq call)');
+    return res.status(200).json({ response: greeting, audioUrl: null, history: await getChatHistory(persona.id) });
+  }
 
   try {
-    // Add user message (check for duplicates)
-    const lastEntry = req.session.chatHistory[req.session.chatHistory.length - 1];
+    // Get existing chat history from DB
+    const dbHistory = await getChatHistory(persona.id);
+
+    // Add user message to DB
+    const lastEntry = dbHistory[dbHistory.length - 1];
     if (!(lastEntry && lastEntry.role === 'user' && lastEntry.parts?.[0]?.text === userMessage)) {
-      req.session.chatHistory.push({
-        role: 'user',
-        parts: [{ text: userMessage }]
-      });
+      await pool.query(
+        'INSERT INTO chat_messages (persona_id, role, text) VALUES ($1, $2, $3)',
+        [persona.id, 'user', userMessage]
+      );
+      dbHistory.push({ role: 'user', parts: [{ text: userMessage }] });
       console.log('[chat] User message added:', userMessage.substring(0, 50));
     }
 
-    // FIXED: Proper history format for Gemini
-    const formattedHistory = req.session.chatHistory.map(msg => ({
-      role: msg.role,
-      parts: [{ text: String(msg.parts?.[0]?.text || '') }]
+    // â”€â”€ HARD CAP: system instruction + last 6 messages â”€â”€
+    // If history is long, summarize older messages into a memory block
+    const MAX_HISTORY = 6;
+    let memoryBlock = '';
+    let recentHistory;
+
+    if (dbHistory.length > MAX_HISTORY) {
+      // Older messages â†’ compact summary (no API call, just concatenate key points)
+      const olderMessages = dbHistory.slice(0, dbHistory.length - MAX_HISTORY);
+      memoryBlock = '\n[Previous conversation summary: ' +
+        olderMessages.map(m => {
+          const text = String(m.parts?.[0]?.text || '').substring(0, 80);
+          return `${m.role === 'user' ? 'User' : 'You'}: ${text}`;
+        }).join(' | ') + ']\n';
+      recentHistory = dbHistory.slice(-MAX_HISTORY);
+      console.log(`[chat] History capped: ${dbHistory.length} â†’ ${MAX_HISTORY} recent + memory summary (${olderMessages.length} older msgs)`);
+    } else {
+      recentHistory = dbHistory;
+    }
+
+    // Format for Groq â€” only recent messages
+    const formattedHistory = recentHistory.map(msg => ({
+      role: msg.role === 'model' ? 'assistant' : 'user',
+      text: String(msg.parts?.[0]?.text || '').substring(0, 600)
     }));
 
-    console.log('[chat] History length:', formattedHistory.length);
-    console.log('[chat] System instruction preview:', req.session.systemInstruction.substring(0, 100));
+    console.log('[chat] History sent to Groq:', formattedHistory.length, 'messages');
 
-    // FIXED: Create chat with proper configuration
-    const chat = model.startChat({
-      history: formattedHistory,
-      generationConfig: {
-        maxOutputTokens: 400,
-        temperature: 0.7,      // INCREASED for more personality
-        topP: 0.9,             // Adjusted for more natural responses
-        topK: 40,
-        candidateCount: 1
-      },
-      // System instruction is passed separately in the first message
-    });
+    const generationConfig = {
+      maxOutputTokens: 400,
+      temperature: 0.7,
+      topP: 0.9
+    };
 
-    // FIXED: Send message with system context prepended for first message
-    let fullPrompt = userMessage;
-    if (formattedHistory.length === 1) { // First user message
-      fullPrompt = `${req.session.systemInstruction}\n\nUser: ${userMessage}\n\nRespond as the person described above:`;
-      console.log('[chat] First message - including system instruction');
+    // Build prompt â€” system instruction is already set via systemInstruction param
+    // Just include memory block (if any) + the user message
+    let fullPrompt;
+    if (memoryBlock) {
+      fullPrompt = `${memoryBlock}\n${userMessage}`;
+    } else {
+      fullPrompt = userMessage;
     }
 
-    console.log('[chat] Sending to Gemini...');
-    const result = await chat.sendMessage(fullPrompt);
-    
-    // Extract response
-    let geminiText = '';
-    try {
-      geminiText = await result.response.text();
-    } catch (e) {
-      console.error('[chat] Error extracting text:', e);
-      geminiText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    }
+    console.log('[chat] Sending to Groq (prompt length:', fullPrompt.length, 'chars)...');
 
-    geminiText = geminiText.trim();
-    console.log('[chat] Response length:', geminiText.length);
-    console.log('[chat] Response preview:', geminiText.substring(0, 100));
+    // Send via semaphore-controlled retry with model fallback
+    let groqText = await groqChatWithRetry(fullPrompt, formattedHistory, generationConfig, persona.system_instruction);
+    groqText = String(groqText || '').trim();
+    console.log('[chat] Response length:', groqText.length);
+    console.log('[chat] Response preview:', groqText.substring(0, 100));
 
-    // Clean up response - remove any AI-like phrases that slipped through
+    // Clean up AI-like phrases (catch generic assistant responses)
     const aiPhrases = [
-      /as an ai\s*/gi,
-      /i'?m an ai\s*/gi,
-      /i'?m a friendly ai\s*/gi,
-      /i don'?t have feelings/gi,
-      /i cannot actually/gi,
-      /i'?m not actually/gi,
-      /i'?m just a language model/gi,
-      /i don'?t have personal experiences/gi,
-      /as a language model/gi,
-      /how can i help you/gi,
-      /how can i assist/gi,
-      /i'?m here to help/gi,
-      /here to assist/gi,
-      /i'?m here to assist/gi
+      /as an ai\s*/gi, /i'?m an ai\s*/gi, /i'?m a friendly ai\s*/gi,
+      /i don'?t have feelings/gi, /i cannot actually/gi, /i'?m not actually/gi,
+      /i'?m just a language model/gi, /i don'?t have personal experiences/gi,
+      /as a language model/gi, /how can i help you\??/gi, /how can i assist/gi,
+      /i'?m here to help[!.]?/gi, /here to assist/gi, /i'?m here to assist/gi,
+      /my purpose is to be helpful[^.]*\./gi, /i cannot respond to your request/gi,
+      /i'?m not able to generate[^.]*\./gi, /if you have another request[^.]*\./gi,
+      /what can i do for you today\??/gi, /i would be happy to assist you[.]?/gi,
+      /i'?m here and ready to help[!.]?/gi, /i am not able to[^.]*\./gi,
+      /that includes using respectful language[.]?/gi,
+      /i'?m sorry,? but i cannot[^.]*\./gi,
     ];
-
-    let cleanedText = geminiText;
-    aiPhrases.forEach(phrase => {
-      cleanedText = cleanedText.replace(phrase, '');
-    });
-    
-    // If cleaning removed too much, use fallback
-    if (cleanedText.trim().length < 3 && geminiText.length > 10) {
+    let cleanedText = groqText;
+    aiPhrases.forEach(phrase => { cleanedText = cleanedText.replace(phrase, ''); });
+    if (cleanedText.trim().length < 3 && groqText.length > 10) {
       cleanedText = "hey! what's up?";
       console.log('[chat] AI phrases removed too much text, using fallback greeting');
     } else {
-      geminiText = cleanedText;
+      groqText = cleanedText;
     }
 
-    // Remove persona name prefix if model added it
-    const personaName = (req.session.personaName || '').trim();
-    if (personaName && geminiText.toLowerCase().startsWith(personaName.toLowerCase())) {
-      geminiText = geminiText.substring(personaName.length).replace(/^[\s::\-–—]+/, '').trim();
+    // Remove persona name prefix
+    const personaName = (persona.name || '').trim();
+    if (personaName && groqText.toLowerCase().startsWith(personaName.toLowerCase())) {
+      groqText = groqText.substring(personaName.length).replace(/^[\s::\-â€“â€”]+/, '').trim();
       console.log('[chat] Removed persona name prefix');
     }
 
-    if (!geminiText || geminiText.length === 0) {
-      console.error('[chat] Empty response from Gemini!');
-      geminiText = "Hey! Sorry, can you say that again?";
+    if (!groqText || groqText.length === 0) {
+      console.error('[chat] Empty response from Groq!');
+      groqText = "Hey! Sorry, can you say that again?";
     }
 
-    // Voice config
-    const voiceConfig = req.session.voiceConfig || { 
-      voiceId: 'en-US-Natalie', 
-      style: 'Conversational',
-      description: 'Default voice'
+    // Voice config from persona
+    const voiceConfig = {
+      voiceId: persona.voice_id || ELEVENLABS_DEFAULT_VOICE_ID,
+      style: persona.voice_style || 'Conversational',
+      description: persona.voice_description || 'Default voice',
+      settings: (persona.voice_settings && typeof persona.voice_settings === 'object')
+        ? persona.voice_settings
+        : deriveVoiceStyleProfile(persona.system_instruction || '').voiceSettings
     };
 
     console.log(`[chat] Using voice: ${voiceConfig.voiceId}`);
 
-    // Generate audio with Murf
+    // Generate audio with ElevenLabs
     let audioUrl = null;
     try {
-      if (geminiText && geminiText.trim().length > 0) {
-        const murfOptions = {
-          method: 'post',
-          url: 'https://api.murf.ai/v1/speech/generate',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'api-key': process.env.MURFAI_API_KEY
-          },
-          data: {
-            text: geminiText.trim(),
-            voiceId: voiceConfig.voiceId,
-            style: voiceConfig.style
-          },
-          timeout: 30000
-        };
-
-        console.log('[chat] Requesting Murf TTS...');
-        const murfResponse = await axios(murfOptions);
-        
-        audioUrl = murfResponse?.data?.audioFile 
-                   || murfResponse?.data?.audioUrl 
-                   || murfResponse?.data?.audio?.file 
-                   || murfResponse?.data?.file 
-                   || null;
-        
-        if (audioUrl) {
-          console.log('[chat] Murf TTS success');
+      if (groqText && groqText.trim().length > 0) {
+        console.log('[chat] Requesting ElevenLabs TTS...');
+        const elevenLabs = await getElevenLabsClient();
+        const audio = await elevenLabs.textToSpeech.convert(voiceConfig.voiceId, {
+          text: groqText.trim(),
+          modelId: ELEVENLABS_MODEL_ID,
+          outputFormat: ELEVENLABS_OUTPUT_FORMAT,
+          voiceSettings: voiceConfig.settings
+        });
+        const audioBuffer = await audioToBuffer(audio);
+        if (audioBuffer && audioBuffer.length > 0) {
+          audioUrl = cacheGeneratedAudio(audioBuffer, 'audio/mpeg');
+          console.log('[chat] ElevenLabs TTS success');
         } else {
-          console.warn('[chat] No audio URL in Murf response');
+          console.warn('[chat] ElevenLabs TTS returned empty audio');
         }
       }
     } catch (err) {
-      console.error('[chat] Murf TTS error:', err?.response?.data || err.message);
+      console.error('[chat] ElevenLabs TTS error:', err?.response?.data || err.message);
     }
 
-    // Add to history
-    const modelEntry = {
-      role: 'model',
-      parts: [{ text: geminiText }]
-    };
-    if (audioUrl) modelEntry.audioUrl = audioUrl;
+    // Save model message to DB
+    await pool.query(
+      'INSERT INTO chat_messages (persona_id, role, text, audio_url) VALUES ($1, $2, $3, $4)',
+      [persona.id, 'model', groqText, audioUrl]
+    );
+    console.log('[chat] Model response saved to DB');
 
-    const lastAfter = req.session.chatHistory[req.session.chatHistory.length - 1];
-    if (!(lastAfter && lastAfter.role === 'model' && lastAfter.parts?.[0]?.text === geminiText)) {
-      req.session.chatHistory.push(modelEntry);
-      console.log('[chat] Model response added to history');
-    }
+    // Clear processing lock
+    processingUsers.delete(userId);
 
-    // Clear processing flag
-    req.session.isProcessing = false;
-    delete req.session.processingStartTime;
-
-    // Save session
-    await new Promise((resolve, reject) => {
-      req.session.save((err) => {
-        if (err) {
-          console.error('[chat] Session save error:', err);
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
-    });
+    // Return full history
+    const fullHistory = await getChatHistory(persona.id);
 
     res.status(200).json({
-      response: geminiText,
+      response: groqText,
       audioUrl: audioUrl,
-      history: req.session.chatHistory
+      history: fullHistory
     });
 
   } catch (error) {
-    console.error('Error in chat endpoint:', error);
-    console.error('Stack:', error.stack);
+    console.error('Error in chat endpoint:', error.message || error);
+    processingUsers.delete(userId);
 
-    req.session.isProcessing = false;
-    delete req.session.processingStartTime;
+    if (isRetryableError(error)) {
+      return res.status(429).json({
+        error: 'The AI is temporarily busy. Please wait a moment and try again.'
+      });
+    }
 
-    req.session.save((err) => {
-      if (err) console.error('[chat] Session save error after exception:', err);
-    });
-
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to get a response from the AI.',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -557,55 +1351,215 @@ app.get('/chat', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/public', 'Chat.html'));
 });
 
-app.post('/new-chat', (req, res) => {
-  req.session.destroy(err => {
-    if (err) {
-      console.error('[new-chat] session destroy error', err);
-      return res.status(500).json({ error: 'Could not clear session.' });
+app.post('/new-chat', authenticateToken, async (req, res) => {
+  try {
+    // Deactivate current persona (keep it in library) and clear its chat
+    const persona = await getActivePersona(req.user.id);
+    if (persona) {
+      await pool.query('DELETE FROM chat_messages WHERE persona_id = $1', [persona.id]);
+      await pool.query('UPDATE personas SET is_active = false WHERE id = $1', [persona.id]);
     }
     res.status(200).json({ message: 'Chat session cleared.' });
-  });
+  } catch (err) {
+    console.error('[new-chat] error', err);
+    res.status(500).json({ error: 'Could not clear session.' });
+  }
 });
 
-app.get('/get-chat-history', (req, res) => {
+// ---------- Persona Library ----------
+
+// List all personas (global library)
+app.get('/api/personas', authenticateToken, async (req, res) => {
   try {
-    if (req.session.chatHistory && Array.isArray(req.session.chatHistory) && req.session.chatHistory.length > 0) {
-      res.status(200).json(req.session.chatHistory);
+    const result = await pool.query(
+      `SELECT DISTINCT ON (ig_username) id, ig_username, name, bio, profile_pic_url, voice_id, voice_description, created_at,
+              (user_id = $1 AND is_active = true) AS is_mine_active
+       FROM personas
+       ORDER BY ig_username, created_at DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[api/personas] error', err);
+    res.status(500).json({ error: 'Could not fetch personas.' });
+  }
+});
+
+// Activate an existing persona for the current user
+app.post('/api/personas/:id/activate', authenticateToken, async (req, res) => {
+  try {
+    const personaId = parseInt(req.params.id);
+    // Check persona exists
+    const persona = await pool.query('SELECT * FROM personas WHERE id = $1', [personaId]);
+    if (!persona.rows.length) return res.status(404).json({ error: 'Persona not found.' });
+
+    const src = persona.rows[0];
+
+    // Deactivate user's current active persona
+    await pool.query('UPDATE personas SET is_active = false WHERE user_id = $1', [req.user.id]);
+
+    // Check if user already has this ig_username persona
+    const existing = await pool.query(
+      'SELECT id FROM personas WHERE user_id = $1 AND ig_username = $2',
+      [req.user.id, src.ig_username]
+    );
+
+    let activeId;
+    if (existing.rows.length) {
+      // Reactivate existing
+      activeId = existing.rows[0].id;
+      await pool.query('UPDATE personas SET is_active = true WHERE id = $1', [activeId]);
     } else {
-      res.status(200).json([]);
+      // Clone persona for this user
+      const ins = await pool.query(
+        `INSERT INTO personas (user_id, ig_username, name, bio, profile_pic_url, voice_id, voice_style, voice_description, voice_settings, system_instruction, is_active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,true) RETURNING id`,
+        [req.user.id, src.ig_username, src.name, src.bio, src.profile_pic_url, src.voice_id, src.voice_style, src.voice_description, JSON.stringify(src.voice_settings || {}), src.system_instruction]
+      );
+      activeId = ins.rows[0].id;
     }
+
+    const active = await pool.query('SELECT * FROM personas WHERE id = $1', [activeId]);
+    const p = active.rows[0];
+
+    res.json({
+      message: 'Persona activated!',
+      personaDetails: {
+        name: p.name,
+        username: p.ig_username,
+        bio: p.bio,
+        profile_pic_url: p.profile_pic_url,
+        voiceId: p.voice_id,
+        voiceDescription: p.voice_description
+      }
+    });
+  } catch (err) {
+    console.error('[api/personas/activate] error', err);
+    res.status(500).json({ error: 'Could not activate persona.' });
+  }
+});
+
+// Delete a persona permanently
+app.delete('/api/personas/:id', authenticateToken, async (req, res) => {
+  try {
+    const personaId = parseInt(req.params.id);
+    // Only allow deleting own personas
+    await pool.query('DELETE FROM personas WHERE id = $1 AND user_id = $2', [personaId, req.user.id]);
+    res.json({ message: 'Persona deleted.' });
+  } catch (err) {
+    console.error('[api/personas/delete] error', err);
+    res.status(500).json({ error: 'Could not delete persona.' });
+  }
+});
+
+// Delete chat history only (keep persona)
+app.delete('/api/chat-history', authenticateToken, async (req, res) => {
+  try {
+    const persona = await getActivePersona(req.user.id);
+    if (persona) {
+      await pool.query('DELETE FROM chat_messages WHERE persona_id = $1', [persona.id]);
+    }
+    res.json({ message: 'Chat history cleared.' });
+  } catch (err) {
+    console.error('[api/chat-history/delete] error', err);
+    res.status(500).json({ error: 'Could not clear chat.' });
+  }
+});
+
+app.get('/get-chat-history', authenticateToken, async (req, res) => {
+  try {
+    const persona = await getActivePersona(req.user.id);
+    if (!persona) return res.status(200).json([]);
+    const history = await getChatHistory(persona.id);
+    res.status(200).json(history);
   } catch (err) {
     console.error('[get-chat-history] error', err);
     res.status(500).json([]);
   }
 });
 
-app.get('/debug-session', (req, res) => {
-  res.status(200).json({
-    systemInstruction: !!req.session.systemInstruction,
-    isProcessing: !!req.session.isProcessing,
-    processingStartTime: req.session.processingStartTime || null,
-    chatHistoryLength: (req.session.chatHistory || []).length,
-    voiceConfig: req.session.voiceConfig || null,
-    chatHistory: req.session.chatHistory || []
+app.get('/api/admin/rapidapi-usage', authenticateToken, async (req, res) => {
+  try {
+    if (!isAdminEmail(req.user?.email)) {
+      return res.status(403).json({ error: 'Admin access required.' });
+    }
+
+    const now = new Date();
+    const dayPeriod = getUtcDayPeriod(now);
+    const monthPeriod = getUtcMonthPeriod(now);
+
+    const [dayUsage, monthUsage] = await Promise.all([
+      getUsageCountForPeriod('day', dayPeriod.key),
+      getUsageCountForPeriod('month', monthPeriod.key)
+    ]);
+
+    const dayCount = dayUsage?.count || 0;
+    const monthCount = monthUsage?.count || 0;
+
+    res.json({
+      source: 'rapidapi',
+      nowUtc: now.toISOString(),
+      daily: {
+        periodKey: dayPeriod.key,
+        used: dayCount,
+        limit: RAPIDAPI_DAILY_BUDGET,
+        remaining: Math.max(RAPIDAPI_DAILY_BUDGET - dayCount, 0),
+        resetAt: dayUsage?.period_end || dayPeriod.end
+      },
+      monthly: {
+        periodKey: monthPeriod.key,
+        used: monthCount,
+        limit: RAPIDAPI_MONTHLY_BUDGET,
+        remaining: Math.max(RAPIDAPI_MONTHLY_BUDGET - monthCount, 0),
+        resetAt: monthUsage?.period_end || monthPeriod.end
+      }
+    });
+  } catch (err) {
+    console.error('[api/admin/rapidapi-usage] error', err);
+    res.status(500).json({ error: 'Could not fetch RapidAPI usage.' });
+  }
+});
+
+// Debug endpoint â€” only available in development
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/debug-session', authenticateToken, async (req, res) => {
+    try {
+      const persona = await getActivePersona(req.user.id);
+      const history = persona ? await getChatHistory(persona.id) : [];
+      res.status(200).json({
+        userId: req.user.id,
+        hasPersona: !!persona,
+        personaName: persona?.name || null,
+        voiceConfig: persona ? { voiceId: persona.voice_id, style: persona.voice_style, description: persona.voice_description, settings: persona.voice_settings || null } : null,
+        chatHistoryLength: history.length,
+        chatHistory: history
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
-});
+}
 
-app.get('/index.html', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/public', 'index.html'));
-});
-
-// Serve the main chat page for the root URL
+// Serve index.html for the root URL
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/public', 'index.html'));
 });
 
-// Serve the add-username page
-app.get('/add-username.html', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/public', 'add-username.html'));
-});
+
+// ======================== Start Server ========================
+(async () => {
+  try {
+    validateStartupConfig();
+    await initDB();
+    app.listen(PORT, () => {
+      console.log(`Server is running on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+})();
 
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+
+
