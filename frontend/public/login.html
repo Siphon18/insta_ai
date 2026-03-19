@@ -197,13 +197,18 @@
         </form>
       </div>
 
-      <div id="google-auth-section" class="hidden mt-5">
+      <div id="google-auth-section" class="mt-5">
         <div class="flex items-center gap-3 text-xs text-slate-400">
           <div class="h-px flex-1 bg-white/10"></div>
           <span>or continue with</span>
           <div class="h-px flex-1 bg-white/10"></div>
         </div>
-        <div id="google-btn-wrap" class="mt-4 flex justify-center"></div>
+        <div id="google-btn-wrap" class="mt-4 flex justify-center">
+          <button id="google-fallback-btn" type="button" disabled
+            class="h-10 px-5 rounded-full border border-white/20 text-sm text-slate-300 bg-white/5 cursor-not-allowed">
+            Google Sign-In Unavailable
+          </button>
+        </div>
         <p id="google-auth-hint" class="hidden mt-3 text-center text-xs text-amber-300/90"></p>
       </div>
 
@@ -267,6 +272,7 @@
         googleAuthEnabled = Boolean(data.enabled && data.clientId);
         googleClientId = googleAuthEnabled ? data.clientId : null;
         if (!googleAuthEnabled) setGoogleHint('Google sign-in is disabled on backend. Add GOOGLE_CLIENT_ID.');
+        else setGoogleHint('');
       } catch (_) {
         setGoogleHint('Google sign-in requires backend API access. Set API_BASE_URL in /config.js.');
       }
@@ -325,7 +331,6 @@
         text: 'continue_with',
         shape: 'pill'
       });
-      section.classList.remove('hidden');
       googleButtonRendered = true;
     }
 
@@ -431,6 +436,7 @@
     });
 
     (async () => {
+      setGoogleHint('Checking Google sign-in availability...');
       await loadGoogleAuthConfig();
       if (!googleAuthEnabled) return;
       for (let i = 0; i < 20; i++) {
@@ -438,6 +444,7 @@
         if (googleButtonRendered) return;
         await new Promise(r => setTimeout(r, 150));
       }
+      if (!googleButtonRendered) setGoogleHint('Google script did not load. Check browser blockers and origin settings.');
     })();
   </script>
 </body>
