@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Persona &mdash; Login / Sign Up</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="/config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -203,6 +204,7 @@
           <div class="h-px flex-1 bg-white/10"></div>
         </div>
         <div id="google-btn-wrap" class="mt-4 flex justify-center"></div>
+        <p id="google-auth-hint" class="hidden mt-3 text-center text-xs text-amber-300/90"></p>
       </div>
 
       <!-- Error / Success Message -->
@@ -223,12 +225,30 @@
     let googleClientId = null;
     let googleButtonRendered = false;
 
+    function apiUrl(path) {
+      const base = (window.__API_BASE_URL__ || '').trim();
+      if (!base || /^https?:\/\//i.test(path)) return path;
+      return `${base}${path}`;
+    }
+
+    function setGoogleHint(message) {
+      const hint = document.getElementById('google-auth-hint');
+      if (!hint) return;
+      if (!message) {
+        hint.classList.add('hidden');
+        hint.textContent = '';
+        return;
+      }
+      hint.textContent = message;
+      hint.classList.remove('hidden');
+    }
+
     // If already logged in, verify token then redirect
     (async () => {
       const token = localStorage.getItem('token');
       if (token) {
         try {
-          const r = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+          const r = await fetch(apiUrl('/api/auth/me'), { headers: { 'Authorization': 'Bearer ' + token } });
           if (r.ok) { window.location.href = '/add-username.html'; return; }
         } catch (e) {}
         localStorage.removeItem('token');
@@ -238,12 +258,18 @@
 
     async function loadGoogleAuthConfig() {
       try {
-        const res = await fetch('/api/auth/google/config');
-        if (!res.ok) return;
+        const res = await fetch(apiUrl('/api/auth/google/config'));
+        if (!res.ok) {
+          setGoogleHint('Google sign-in is unavailable right now.');
+          return;
+        }
         const data = await res.json();
         googleAuthEnabled = Boolean(data.enabled && data.clientId);
         googleClientId = googleAuthEnabled ? data.clientId : null;
-      } catch (_) {}
+        if (!googleAuthEnabled) setGoogleHint('Google sign-in is disabled on backend. Add GOOGLE_CLIENT_ID.');
+      } catch (_) {
+        setGoogleHint('Google sign-in requires backend API access. Set API_BASE_URL in /config.js.');
+      }
     }
 
     async function handleGoogleCredential(response) {
@@ -255,7 +281,7 @@
       setLoading(true);
       document.getElementById('auth-message').classList.add('hidden');
       try {
-        const res = await fetch('/api/auth/google', {
+        const res = await fetch(apiUrl('/api/auth/google'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ credential })
@@ -353,7 +379,7 @@
       setLoading(true);
       document.getElementById('auth-message').classList.add('hidden');
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(apiUrl('/api/auth/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
@@ -385,7 +411,7 @@
       setLoading(true);
       document.getElementById('auth-message').classList.add('hidden');
       try {
-        const res = await fetch('/api/auth/signup', {
+        const res = await fetch(apiUrl('/api/auth/signup'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
@@ -416,4 +442,5 @@
   </script>
 </body>
 </html>
+
 

@@ -7,6 +7,10 @@
   <title>AI Persona &mdash; Instagram AI Chat</title>
   <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon" />
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <link href="https://fonts.googleapis.com" rel="preconnect" />
   <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -93,6 +97,50 @@
     /* step icon float */
     @keyframes icon-bob { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-8px); } }
     .icon-bob { animation: icon-bob 3s ease-in-out infinite; }
+
+    .hero-3d-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .7;
+    }
+
+    @keyframes rb-card-in {
+      0% { opacity: 0; transform: translateY(18px) scale(.985); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .rb-grid {
+      display: grid;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    @media (min-width: 768px) {
+      .rb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    .rb-card {
+      border: 1px solid rgba(255, 255, 255, .12);
+      background: linear-gradient(140deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+      border-radius: 1rem;
+      padding: 1rem;
+      min-height: 160px;
+      box-shadow: 0 12px 28px -16px rgba(131, 58, 180, .45);
+      transition: transform .35s cubic-bezier(.2,.9,.3,1), border-color .35s ease;
+      animation: rb-card-in .55s cubic-bezier(.22,1,.36,1) both;
+    }
+    .rb-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(225,48,108,.45);
+    }
+    .rb-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 999px;
+      padding: .25rem .55rem;
+      color: #d1d5db;
+      font-size: .72rem;
+    }
   </style>
   <script>
     tailwind.config = {
@@ -148,6 +196,7 @@
 
         <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HERO â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <section class="relative flex min-h-[540px] flex-col items-center justify-center gap-8 rounded-3xl overflow-hidden p-10 text-center">
+          <div id="hero-3d" class="hero-3d-layer"></div>
           <!-- abstract mesh background -->
           <div class="absolute inset-0 opacity-[.08]"
             style="background:repeating-conic-gradient(from 0deg at 50% 50%, #833ab4 0% 25%, #fd1d1d 25% 50%, #fcb045 50% 75%, #833ab4 75% 100%);
@@ -310,6 +359,19 @@
           </div>
         </section>
 
+        <section class="reveal">
+          <div class="glass rounded-2xl p-6 sm:p-8">
+            <div class="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-widest text-ig-pink">React Bits</p>
+                <h3 class="text-2xl font-bold text-white">Animated Persona Blocks</h3>
+              </div>
+              <span class="rb-pill">React island</span>
+            </div>
+            <div id="react-bits-root"></div>
+          </div>
+        </section>
+
         <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• DEMO CHAT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <section class="reveal">
           <div class="glass rounded-2xl p-8 max-w-lg mx-auto">
@@ -438,8 +500,144 @@
       } else {
         reveals.forEach(el => el.classList.add('visible'));
       }
+
+      const heroLayer = document.getElementById('hero-3d');
+      if (heroLayer && window.THREE) {
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(55, heroLayer.clientWidth / heroLayer.clientHeight, 0.1, 1000);
+        camera.position.set(0, 0, 34);
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
+        renderer.setSize(heroLayer.clientWidth, heroLayer.clientHeight);
+        heroLayer.appendChild(renderer.domElement);
+
+        const group = new THREE.Group();
+        scene.add(group);
+
+        const pointCount = 1700;
+        const positions = new Float32Array(pointCount * 3);
+        for (let i = 0; i < pointCount; i++) {
+          const radius = 9 + Math.random() * 6;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos((Math.random() * 2) - 1);
+          positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+          positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+          positions[i * 3 + 2] = radius * Math.cos(phi);
+        }
+
+        const pointsGeometry = new THREE.BufferGeometry();
+        pointsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const pointsMaterial = new THREE.PointsMaterial({
+          color: 0xe1306c,
+          size: 0.08,
+          transparent: true,
+          opacity: 0.9
+        });
+        const points = new THREE.Points(pointsGeometry, pointsMaterial);
+        group.add(points);
+
+        const ringGeometry = new THREE.TorusGeometry(11.5, 0.05, 12, 140);
+        const ringMaterial = new THREE.MeshBasicMaterial({
+          color: 0xfcb045,
+          transparent: true,
+          opacity: 0.22
+        });
+        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+        ring.rotation.x = 1.18;
+        group.add(ring);
+
+        const ring2 = ring.clone();
+        ring2.material = ringMaterial.clone();
+        ring2.material.color = new THREE.Color(0x833ab4);
+        ring2.material.opacity = 0.18;
+        ring2.scale.set(0.88, 0.88, 0.88);
+        ring2.rotation.x = 0.75;
+        ring2.rotation.y = 0.5;
+        group.add(ring2);
+
+        let pointerX = 0;
+        let pointerY = 0;
+        window.addEventListener('pointermove', (e) => {
+          pointerX = (e.clientX / window.innerWidth - 0.5) * 0.9;
+          pointerY = (e.clientY / window.innerHeight - 0.5) * 0.6;
+        });
+
+        function onResize() {
+          if (!heroLayer) return;
+          const w = heroLayer.clientWidth || 1;
+          const h = heroLayer.clientHeight || 1;
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+        }
+        window.addEventListener('resize', onResize);
+
+        function tick() {
+          group.rotation.y += 0.0021;
+          group.rotation.x += 0.00085;
+          group.rotation.y += (pointerX - group.rotation.y) * 0.01;
+          group.rotation.x += (-pointerY - group.rotation.x) * 0.01;
+          ring.rotation.z += 0.0017;
+          ring2.rotation.z -= 0.0013;
+          renderer.render(scene, camera);
+          requestAnimationFrame(tick);
+        }
+        tick();
+      }
+
+      // Progressive React island: modern animated cards without affecting existing page flow.
+      const bitsRoot = document.getElementById('react-bits-root');
+      if (bitsRoot && window.React && window.ReactDOM) {
+        const h = window.React.createElement;
+        const useEffect = window.React.useEffect;
+        const useState = window.React.useState;
+
+        function BitsCard(props) {
+          return h('article', {
+            className: 'rb-card',
+            style: { animationDelay: `${props.delay || 0}ms` }
+          }, [
+            h('div', { key: 't', className: 'text-sm font-semibold text-white' }, props.title),
+            h('p', { key: 'd', className: 'mt-2 text-sm text-gray-300' }, props.desc),
+            h('div', { key: 'm', className: 'mt-4 text-xs text-ig-pink font-medium' }, props.meta)
+          ]);
+        }
+
+        function ReactBitsPanel() {
+          const [online, setOnline] = useState(false);
+          useEffect(() => {
+            const id = setTimeout(() => setOnline(true), 300);
+            return () => clearTimeout(id);
+          }, []);
+
+          return h('div', null, [
+            h('div', { key: 's', className: 'mb-4 flex items-center gap-2 text-sm' }, [
+              h('span', {
+                key: 'dot',
+                style: {
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '999px',
+                  background: online ? '#22c55e' : '#f59e0b',
+                  boxShadow: online ? '0 0 14px #22c55e' : '0 0 10px #f59e0b'
+                }
+              }),
+              h('span', { key: 'txt', className: 'text-gray-300' }, online ? 'Animation engine active' : 'Booting motion engine...')
+            ]),
+            h('div', { key: 'g', className: 'rb-grid' }, [
+              h(BitsCard, { key: 'a', delay: 40, title: 'Intent Pulse', desc: 'Tracks conversation mood and keeps response energy coherent across turns.', meta: 'Stateful style memory' }),
+              h(BitsCard, { key: 'b', delay: 130, title: 'Voice Match', desc: 'Pairs persona temperament with ElevenLabs tuning for stable delivery.', meta: 'Persona-linked synthesis' }),
+              h(BitsCard, { key: 'c', delay: 220, title: 'Latency Guard', desc: 'Maintains responsive UX even during upstream model retries and fallback.', meta: 'Rate-limit aware flow' })
+            ])
+          ]);
+        }
+
+        window.ReactDOM.createRoot(bitsRoot).render(h(ReactBitsPanel));
+      }
     });
   </script>
 </body>
 </html>
+
 

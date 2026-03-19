@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html class="dark" lang="en">
 
 <head>
@@ -6,6 +6,7 @@
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
   <title>AI Persona &mdash; Generate</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="/config.js"></script>
   <link href="https://fonts.googleapis.com" rel="preconnect" />
   <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -399,7 +400,7 @@
         if (!textEl || !barEl || !resetEl || !usage) return;
 
         const percent = usagePercent(usage.used, usage.limit);
-        textEl.textContent = `${usage.used}/${usage.limit} used • ${usage.remaining} left`;
+        textEl.textContent = `${usage.used}/${usage.limit} used â€¢ ${usage.remaining} left`;
         barEl.style.width = `${percent}%`;
         resetEl.textContent = `Resets: ${formatResetTime(usage.resetAt)}`;
       }
@@ -497,16 +498,16 @@
 
         // Rotating loading messages
         const loadingLines = [
-          { text: 'Stalking their profile... professionally 🕵️', icon: 'person_search' },
-          { text: 'Reading their bio like a detective 🔍', icon: 'fingerprint' },
-          { text: 'Downloading their entire vibe... 💫', icon: 'download' },
-          { text: 'Counting their followers (flex check) 💪', icon: 'group' },
-          { text: 'Studying their caption game 📝', icon: 'edit_note' },
-          { text: 'Analyzing personality with AI 🧠', icon: 'psychology' },
-          { text: 'Figuring out if they\'re a morning or night poster 🌙', icon: 'schedule' },
-          { text: 'Teaching AI to talk like them 🎭', icon: 'record_voice_over' },
-          { text: 'Almost there... building persona ✨', icon: 'auto_awesome' },
-          { text: 'Picking the perfect voice 🎤', icon: 'mic' },
+          { text: 'Stalking their profile... professionally ðŸ•µï¸', icon: 'person_search' },
+          { text: 'Reading their bio like a detective ðŸ”', icon: 'fingerprint' },
+          { text: 'Downloading their entire vibe... ðŸ’«', icon: 'download' },
+          { text: 'Counting their followers (flex check) ðŸ’ª', icon: 'group' },
+          { text: 'Studying their caption game ðŸ“', icon: 'edit_note' },
+          { text: 'Analyzing personality with AI ðŸ§ ', icon: 'psychology' },
+          { text: 'Figuring out if they\'re a morning or night poster ðŸŒ™', icon: 'schedule' },
+          { text: 'Teaching AI to talk like them ðŸŽ­', icon: 'record_voice_over' },
+          { text: 'Almost there... building persona âœ¨', icon: 'auto_awesome' },
+          { text: 'Picking the perfect voice ðŸŽ¤', icon: 'mic' },
         ];
         let loadingIndex = 0;
         const loadingText = document.getElementById('loading-text');
@@ -572,7 +573,7 @@
         }
       });
 
-      // ── Persona Library ──
+      // â”€â”€ Persona Library â”€â”€
       async function loadPersonaLibrary() {
         try {
           const resp = await fetch('/api/personas', { headers: authHeaders() });
@@ -664,3 +665,4 @@
   </script>
 </body>
 </html>
+

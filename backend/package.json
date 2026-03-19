@@ -4,7 +4,8 @@
   "description": "An AI chatbot that mimics an Instagram user's personality.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "migrate:neon": "node scripts/migrate-to-neon.js"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.19.0",

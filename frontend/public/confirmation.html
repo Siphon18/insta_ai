@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html class="dark" lang="en">
 
 <head>
@@ -6,6 +6,7 @@
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
   <title>AI Persona &mdash; Confirm</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="/config.js"></script>
   <link href="https://fonts.googleapis.com" rel="preconnect" />
   <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -209,7 +210,7 @@
   </div>
 
   <script>
-    // Auth guard — verify token with server
+    // Auth guard â€” verify token with server
     (async () => {
       const token = localStorage.getItem('token');
       if (!token) { window.location.href = '/login.html'; return; }
@@ -252,14 +253,14 @@
       document.getElementById('confirmBtn').addEventListener('click', () => {
         const persona = JSON.parse(localStorage.getItem('personaData'));
         if (!persona || !persona.username) {
-          alert('Persona data missing — please add username first.');
+          alert('Persona data missing â€” please add username first.');
           window.location.href = '/add-username.html';
           return;
         }
         window.location.href = '/chat';
       });
 
-      // ── Fetch Instagram Posts ──
+      // â”€â”€ Fetch Instagram Posts â”€â”€
       if (personaData && personaData.username) {
         fetchPosts(personaData.username);
       }
@@ -327,3 +328,4 @@
   </script>
 </body>
 </html>
+
