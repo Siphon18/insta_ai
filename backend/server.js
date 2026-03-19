@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const helmet = require('helmet');
+const { OAuth2Client } = require('google-auth-library');
 require('dotenv').config();
 
 const { pool, initDB } = require('./db');
@@ -16,6 +17,7 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
 const JWT_SECRET = process.env.JWT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 
 const GROQ_API_BASE_URL = process.env.GROQ_API_BASE_URL || 'https://api.groq.com/openai/v1';
 const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
@@ -152,6 +154,7 @@ async function groqChatCompletion({ modelName, messages, generationConfig }) {
 }
 
 let elevenLabsClientPromise = null;
+let googleOAuthClient = null;
 const generatedAudioCache = new Map(); // id -> { buffer, contentType, createdAt }
 const AUDIO_CACHE_TTL_MS = 60 * 60 * 1000;
 
@@ -169,6 +172,11 @@ async function getElevenLabsClient() {
       .then(mod => new mod.ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY }));
   }
   return elevenLabsClientPromise;
+}
+
+function getGoogleOAuthClient() {
+  if (!googleOAuthClient) googleOAuthClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+  return googleOAuthClient;
 }
 
 async function audioToBuffer(audio) {
@@ -320,12 +328,13 @@ app.use(helmet({
       baseUri: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com", "https://accounts.google.com", "https://apis.google.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       mediaSrc: ["'self'", "blob:", "https:"],
-      connectSrc: ["'self'", "https:"]
+      connectSrc: ["'self'", "https:"],
+      frameSrc: ["'self'", "https://accounts.google.com"]
     }
   },
   crossOriginEmbedderPolicy: false
@@ -427,6 +436,71 @@ app.post('/api/auth/login', authLoginLimiter, async (req, res) => {
   } catch (err) {
     console.error('[login] error:', err);
     res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+app.get('/api/auth/google/config', (req, res) => {
+  const enabled = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID.trim());
+  res.status(200).json({ enabled, clientId: enabled ? GOOGLE_CLIENT_ID : null });
+});
+
+app.post('/api/auth/google', authLoginLimiter, async (req, res) => {
+  const credential = String(req.body?.credential || '').trim();
+  if (!credential) return res.status(400).json({ error: 'Google credential is required.' });
+  if (!GOOGLE_CLIENT_ID) return res.status(503).json({ error: 'Google OAuth is not configured on this server.' });
+
+  try {
+    const ticket = await getGoogleOAuthClient().verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID
+    });
+    const payload = ticket.getPayload();
+    const email = String(payload?.email || '').toLowerCase().trim();
+    const googleSub = String(payload?.sub || '').trim();
+    const emailVerified = payload?.email_verified === true;
+
+    if (!email || !googleSub || !emailVerified) {
+      return res.status(400).json({ error: 'Invalid Google account payload.' });
+    }
+
+    let user = null;
+    const byGoogle = await pool.query(
+      'SELECT id, email, google_sub FROM users WHERE google_sub = $1',
+      [googleSub]
+    );
+    if (byGoogle.rows.length > 0) {
+      user = byGoogle.rows[0];
+    } else {
+      const byEmail = await pool.query(
+        'SELECT id, email, google_sub FROM users WHERE email = $1',
+        [email]
+      );
+
+      if (byEmail.rows.length > 0) {
+        const existing = byEmail.rows[0];
+        if (existing.google_sub && existing.google_sub !== googleSub) {
+          return res.status(409).json({ error: 'This email is linked to a different Google account.' });
+        }
+        const updated = await pool.query(
+          'UPDATE users SET google_sub = $1 WHERE id = $2 RETURNING id, email, google_sub',
+          [googleSub, existing.id]
+        );
+        user = updated.rows[0];
+      } else {
+        const generatedPasswordHash = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
+        const created = await pool.query(
+          'INSERT INTO users (email, password_hash, google_sub) VALUES ($1, $2, $3) RETURNING id, email, google_sub',
+          [email, generatedPasswordHash, googleSub]
+        );
+        user = created.rows[0];
+      }
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    res.status(200).json({ token, user: { id: user.id, email: user.email } });
+  } catch (err) {
+    console.error('[google-auth] error:', err?.message || err);
+    res.status(401).json({ error: 'Google authentication failed. Please try again.' });
   }
 });
 

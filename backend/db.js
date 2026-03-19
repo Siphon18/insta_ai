@@ -26,9 +26,18 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS users (
         id            SERIAL PRIMARY KEY,
         email         VARCHAR(255) UNIQUE NOT NULL,
+        google_sub    VARCHAR(255),
         password_hash VARCHAR(255) NOT NULL,
         created_at    TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255);
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique_idx
+      ON users (google_sub)
+      WHERE google_sub IS NOT NULL;
     `);
 
     // Personas — multiple personas per user, one active at a time

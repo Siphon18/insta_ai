@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Persona &mdash; Login / Sign Up</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -123,9 +124,9 @@
       </div>
 
       <h1 class="text-2xl sm:text-3xl font-bold text-center text-white mb-1">
-        Welcome to <span class="gradient-text">AI Persona</span>
+        Launch Your <span class="gradient-text">AI Persona</span>
       </h1>
-      <p class="text-center text-slate-400 mb-6 text-sm">Sign in or create an account to get started.</p>
+      <p class="text-center text-slate-400 mb-6 text-sm">Create realistic IG-style voice personas in minutes.</p>
 
       <!-- Tabs -->
       <div class="flex justify-center gap-8 mb-6 border-b border-white/10 pb-3">
@@ -195,6 +196,15 @@
         </form>
       </div>
 
+      <div id="google-auth-section" class="hidden mt-5">
+        <div class="flex items-center gap-3 text-xs text-slate-400">
+          <div class="h-px flex-1 bg-white/10"></div>
+          <span>or continue with</span>
+          <div class="h-px flex-1 bg-white/10"></div>
+        </div>
+        <div id="google-btn-wrap" class="mt-4 flex justify-center"></div>
+      </div>
+
       <!-- Error / Success Message -->
       <div id="auth-message" class="hidden mt-4 p-3 rounded-xl text-sm flex items-start gap-2"></div>
 
@@ -209,6 +219,10 @@
   <p class="relative z-10 text-xs text-slate-600 mt-6">&copy; 2025 AI Persona. Powered by Groq &amp; ElevenLabs</p>
 
   <script>
+    let googleAuthEnabled = false;
+    let googleClientId = null;
+    let googleButtonRendered = false;
+
     // If already logged in, verify token then redirect
     (async () => {
       const token = localStorage.getItem('token');
@@ -221,6 +235,73 @@
         localStorage.removeItem('personaData');
       }
     })();
+
+    async function loadGoogleAuthConfig() {
+      try {
+        const res = await fetch('/api/auth/google/config');
+        if (!res.ok) return;
+        const data = await res.json();
+        googleAuthEnabled = Boolean(data.enabled && data.clientId);
+        googleClientId = googleAuthEnabled ? data.clientId : null;
+      } catch (_) {}
+    }
+
+    async function handleGoogleCredential(response) {
+      const credential = String(response?.credential || '').trim();
+      if (!credential) {
+        showMessage('Google sign-in failed. Please retry.');
+        return;
+      }
+      setLoading(true);
+      document.getElementById('auth-message').classList.add('hidden');
+      try {
+        const res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showMessage(data.error || 'Google sign-in failed.');
+          return;
+        }
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userEmail', data.user.email);
+        showMessage('Google sign-in successful! Redirecting...', false);
+        setTimeout(() => { window.location.href = '/add-username.html'; }, 600);
+      } catch (_) {
+        showMessage('Network error. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function maybeRenderGoogleButton() {
+      if (!googleAuthEnabled || googleButtonRendered) return;
+      if (!(window.google && window.google.accounts && window.google.accounts.id)) return;
+
+      const section = document.getElementById('google-auth-section');
+      const wrap = document.getElementById('google-btn-wrap');
+      if (!section || !wrap) return;
+
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleCredential,
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+
+      wrap.innerHTML = '';
+      window.google.accounts.id.renderButton(wrap, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'pill'
+      });
+      section.classList.remove('hidden');
+      googleButtonRendered = true;
+    }
 
     function switchTab(tab) {
       const loginTab = document.getElementById('tab-login');
@@ -322,6 +403,16 @@
         setLoading(false);
       }
     });
+
+    (async () => {
+      await loadGoogleAuthConfig();
+      if (!googleAuthEnabled) return;
+      for (let i = 0; i < 20; i++) {
+        maybeRenderGoogleButton();
+        if (googleButtonRendered) return;
+        await new Promise(r => setTimeout(r, 150));
+      }
+    })();
   </script>
 </body>
 </html>
