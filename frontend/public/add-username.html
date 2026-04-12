@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html class="dark" lang="en">
 
 <head>
@@ -451,23 +451,25 @@
 
           const maleOptgroup = document.createElement('optgroup');
           maleOptgroup.label = 'Male Voices';
+          maleOptgroup.className = 'bg-slate-900 text-gray-400 font-semibold';
           voices.male.forEach((voice) => {
             const option = document.createElement('option');
             option.value = voice.voiceId;
             option.textContent = prettyLabel(voice);
             option.title = `ID: ${voice.voiceId}`;
-            option.className = 'bg-slate-900';
+            option.className = 'bg-slate-900 text-white';
             maleOptgroup.appendChild(option);
           });
 
           const femaleOptgroup = document.createElement('optgroup');
           femaleOptgroup.label = 'Female Voices';
+          femaleOptgroup.className = 'bg-slate-900 text-gray-400 font-semibold';
           voices.female.forEach((voice) => {
             const option = document.createElement('option');
             option.value = voice.voiceId;
             option.textContent = prettyLabel(voice);
             option.title = `ID: ${voice.voiceId}`;
-            option.className = 'bg-slate-900';
+            option.className = 'bg-slate-900 text-white';
             femaleOptgroup.appendChild(option);
           });
 
