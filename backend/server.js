@@ -1,4 +1,4 @@
-﻿// server.js â€” JWT + PostgreSQL based backend
+// server.js â€” JWT + PostgreSQL based backend
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
@@ -1527,15 +1527,25 @@ app.post('/chat', authenticateToken, async (req, res) => {
     let audioUrl = null;
     try {
       if (groqText && groqText.trim().length > 0) {
-        console.log('[chat] Requesting ElevenLabs TTS...');
-        const elevenLabs = await getElevenLabsClient();
-        const audio = await elevenLabs.textToSpeech.convert(voiceConfig.voiceId, {
-          text: groqText.trim(),
-          modelId: ELEVENLABS_MODEL_ID,
-          outputFormat: ELEVENLABS_OUTPUT_FORMAT,
-          voiceSettings: voiceConfig.settings
-        });
-        const audioBuffer = await audioToBuffer(audio);
+        console.log('[chat] Requesting ElevenLabs TTS via Axios...');
+        const apiKey = process.env.ELEVENLABS_API_KEY;
+        const response = await axios.post(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceConfig.voiceId}`,
+          {
+            text: groqText.trim(),
+            model_id: ELEVENLABS_MODEL_ID,
+            voice_settings: voiceConfig.settings || { stability: 0.5, similarity_boost: 0.75 }
+          },
+          {
+            headers: {
+              'xi-api-key': apiKey,
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mpeg'
+            },
+            responseType: 'arraybuffer'
+          }
+        );
+        const audioBuffer = Buffer.from(response.data);
         if (audioBuffer && audioBuffer.length > 0) {
           // Store in DB-backed persistent audio store so links survive restarts.
           audioUrl = await persistGeneratedAudio(audioBuffer, 'audio/mpeg');

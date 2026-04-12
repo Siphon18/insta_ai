@@ -289,10 +289,15 @@
       const personaData = (() => { try { return JSON.parse(localStorage.getItem('personaData')); } catch(e) { return null; } })();
       const personaName = personaData?.name || 'AI Persona';
       const voiceInfo = personaData?.voiceDescription || null;
-      let aiPersonaPicUrl = localStorage.getItem('aiPersonaPic') || null;
-      if (aiPersonaPicUrl && aiPersonaPicUrl.startsWith('/image-proxy')) {
-        aiPersonaPicUrl = aiPersonaPicUrl.replace('/image-proxy', '/api/image-proxy');
-        localStorage.setItem('aiPersonaPic', aiPersonaPicUrl);
+      let aiPersonaPicUrl = null;
+      if (personaData && personaData.profile_pic_url) {
+        aiPersonaPicUrl = resolveApiMediaUrl('/api/image-proxy?url=' + encodeURIComponent(personaData.profile_pic_url));
+      } else {
+        aiPersonaPicUrl = localStorage.getItem('aiPersonaPic') || null;
+        if (aiPersonaPicUrl && aiPersonaPicUrl.startsWith('/image-proxy')) {
+          aiPersonaPicUrl = aiPersonaPicUrl.replace('/image-proxy', '/api/image-proxy');
+          localStorage.setItem('aiPersonaPic', aiPersonaPicUrl);
+        }
       }
       aiPersonaPicUrl = resolveApiMediaUrl(aiPersonaPicUrl);
 
