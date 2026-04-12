@@ -218,7 +218,7 @@
 
     async function loadGoogleAuthConfig() {
       try {
-        const res = await fetch(apiUrl('/api/auth/google-config'));
+        const res = await fetch(apiUrl('/api/auth/google/config'));
         if (!res.ok) { disableGoogle(); return; }
         const cfg = await res.json();
         if (cfg.enabled && cfg.clientId) {
