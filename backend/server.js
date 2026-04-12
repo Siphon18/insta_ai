@@ -332,6 +332,7 @@ function deriveVoiceStyleProfile(personalityAnalysis = '') {
 
 app.use(express.json());
 app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
