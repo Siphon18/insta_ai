@@ -1,643 +1,506 @@
-﻿<!DOCTYPE html>
-<html class="dark" lang="en">
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-  <title>AI Persona &mdash; Instagram AI Chat</title>
-  <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon" />
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <script src="/config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-  <link href="https://fonts.googleapis.com" rel="preconnect" />
-  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Persona — Turn Any Instagram Profile Into a Real-Time AI</title>
+  <meta name="description" content="Clone any Instagram account's personality and chat with an AI that mimics their tone, attitude, and speaking style in real time." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #ff8aa5;
+      --secondary: #cb80fe;
+      --tertiary: #ff7162;
+      --ig-pink: #e1306c;
+      --ig-purple: #833ab4;
+      --ig-red: #fd1d1d;
+      --ig-orange: #fcb045;
+      --bg: #0e0e0e;
+      --surface: #1a1919;
+      --surface-high: #201f1f;
+      --surface-highest: #262626;
+      --on-surface: #ffffff;
+      --on-surface-var: #adaaaa;
+      --outline-var: #494847;
+    }
+
     html { scroll-behavior: smooth; }
-    body { font-family: 'Space Grotesk', sans-serif; }
-
-    /* Instagram gradient background */
-    @keyframes gradient-shift {
-      0%   { background-position: 0% 50%; }
-      50%  { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    .ig-bg {
-      background: linear-gradient(-45deg, #0a0a0a, #1a0a2e, #120a1e, #0d0d0d, #1c0818);
-      background-size: 400% 400%;
-      animation: gradient-shift 18s ease infinite;
+    body {
+      font-family: 'Manrope', sans-serif;
+      background: var(--bg);
+      color: var(--on-surface);
+      overflow-x: hidden;
+      min-height: 100vh;
     }
 
-    /* floating orbs â€” instagram colours */
-    .orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .18; pointer-events: none; }
-    @keyframes float-1 { 0%,100%{ transform: translate(0,0) scale(1); } 50%{ transform: translate(40px,-60px) scale(1.15); } }
-    @keyframes float-2 { 0%,100%{ transform: translate(0,0) scale(1); } 50%{ transform: translate(-50px,40px) scale(1.1); } }
-    @keyframes float-3 { 0%,100%{ transform: translate(0,0) scale(1); } 50%{ transform: translate(30px,50px) scale(1.2); } }
-
-    /* hero entrance */
-    @keyframes hero-fade-in {
-      0%   { opacity: 0; transform: translateY(30px); }
-      100% { opacity: 1; transform: translateY(0); }
+    /* ── Background ── */
+    .bg-canvas {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background: radial-gradient(ellipse at 20% 20%, rgba(131,58,180,.12) 0%, transparent 50%),
+                  radial-gradient(ellipse at 80% 80%, rgba(253,29,29,.08) 0%, transparent 50%),
+                  radial-gradient(ellipse at 50% 100%, rgba(252,176,69,.06) 0%, transparent 50%),
+                  var(--bg);
     }
-    .animate-hero { animation: hero-fade-in .9s cubic-bezier(.22,1,.36,1) forwards; opacity: 0; }
-    .animate-hero-d1 { animation-delay: .15s; }
-    .animate-hero-d2 { animation-delay: .3s; }
-    .animate-hero-d3 { animation-delay: .45s; }
-
-    /* instagram gradient text */
-    .ig-text {
-      background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-
-    /* glassmorphism card */
-    .glass {
-      background: rgba(255,255,255,.04);
-      backdrop-filter: blur(18px) saturate(1.2);
-      -webkit-backdrop-filter: blur(18px) saturate(1.2);
-      border: 1px solid rgba(255,255,255,.08);
-    }
-
-    /* 3-D card tilt */
-    .card-hover { transition: transform .45s cubic-bezier(.2,.9,.3,1), box-shadow .45s ease; }
-    .card-hover:hover { transform: translateY(-8px) rotateX(2deg) rotateY(-2deg); box-shadow: 0 24px 48px -12px rgba(131,58,180,.2); }
-
-    /* pricing glow */
-    .pricing-glow { transition: all .4s ease; }
-    .pricing-glow:hover { box-shadow: 0 0 35px -6px rgba(225,48,108,.3); border-color: rgba(225,48,108,.4); }
-
-    .reveal { opacity: 0; transform: translateY(30px); transition: opacity .8s cubic-bezier(.22,1,.36,1), transform .8s cubic-bezier(.22,1,.36,1); }
-    .reveal.visible { opacity: 1; transform: translateY(0); }
-
-    /* instagram shimmer button */
-    @keyframes shimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
-    .btn-ig {
-      background-size: 200% auto;
-      background-image: linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045, #fd1d1d, #833ab4);
-      animation: shimmer 4s linear infinite;
-    }
-
-    /* dot grid */
-    .grid-pattern {
-      background-image: radial-gradient(circle, rgba(255,255,255,.03) 1px, transparent 1px);
+    .dot-grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: radial-gradient(circle, rgba(73,72,71,.4) 1px, transparent 1px);
       background-size: 30px 30px;
     }
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(80px); pointer-events: none; z-index: 0;
+    }
+    .orb-1 { width: 500px; height: 500px; background: rgba(131,58,180,.15); top: -150px; left: -150px; animation: float1 14s ease-in-out infinite; }
+    .orb-2 { width: 400px; height: 400px; background: rgba(253,29,29,.10); bottom: -100px; right: -100px; animation: float2 16s ease-in-out infinite; }
+    .orb-3 { width: 350px; height: 350px; background: rgba(252,176,69,.07); top: 40%; left: 50%; transform: translateX(-50%); animation: float3 18s ease-in-out infinite; }
+    @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(30px,-40px)} }
+    @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,40px)} }
+    @keyframes float3 { 0%,100%{transform:translateX(-50%) scale(1)} 50%{transform:translateX(-50%) scale(1.1)} }
 
-    /* instagram ring */
-    .ig-ring {
-      background: conic-gradient(from 45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75);
-      padding: 3px; border-radius: 50%;
+    .page-wrap { position: relative; z-index: 1; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 48px; height: 68px;
+      background: rgba(14,14,14,.7); backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+    .nav-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .insta-ring-sm {
+      width: 36px; height: 36px; border-radius: 50%; padding: 2px; flex-shrink: 0;
+      background: conic-gradient(from 0deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75);
+      animation: ring-spin 8s linear infinite;
     }
     @keyframes ring-spin { to { filter: hue-rotate(360deg); } }
-    .ig-ring-anim { animation: ring-spin 6s linear infinite; }
+    .insta-ring-sm .ring-inner {
+      width: 100%; height: 100%; border-radius: 50%; background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-logo span.logo-text { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; color: #fff; }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a { color: var(--on-surface-var); font-size: 14px; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .nav-links a:hover { color: var(--primary); }
+    .btn-shimmer {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 22px; border-radius: 9999px; border: none; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; color: #fff;
+      background-size: 200% auto;
+      background-image: linear-gradient(90deg, var(--ig-purple), var(--ig-red), var(--ig-orange), var(--ig-red), var(--ig-purple));
+      animation: shimmer 4s linear infinite;
+      transition: transform .2s, box-shadow .2s;
+      text-decoration: none;
+    }
+    @keyframes shimmer { to { background-position: 200% center; } }
+    .btn-shimmer:hover { transform: scale(1.04); box-shadow: 0 0 30px rgba(225,48,108,.35); }
 
-    /* step icon float */
-    @keyframes icon-bob { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-8px); } }
-    .icon-bob { animation: icon-bob 3s ease-in-out infinite; }
+    /* ── HERO ── */
+    .hero {
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      padding: 80px 24px 60px;
+      position: relative;
+    }
+    #hero-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .4; }
+    .hero-content { position: relative; z-index: 1; max-width: 820px; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 16px; border-radius: 9999px;
+      background: rgba(225,48,108,.15); border: 1px solid rgba(225,48,108,.3);
+      font-size: 12px; font-weight: 600; color: var(--primary);
+      margin-bottom: 28px; letter-spacing: .04em;
+    }
+    .hero-badge .material-symbols-outlined { font-size: 15px; }
+    .hero-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(40px, 6vw, 72px); font-weight: 800;
+      line-height: 1.1; letter-spacing: -.02em; margin-bottom: 24px;
+    }
+    .grad-text {
+      background: linear-gradient(135deg, var(--ig-purple), var(--ig-red), var(--ig-orange));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .hero-sub {
+      font-size: 18px; color: var(--on-surface-var); line-height: 1.7;
+      max-width: 580px; margin: 0 auto 40px; font-weight: 400;
+    }
+    .hero-cta { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .btn-outline {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 28px; border-radius: 9999px;
+      border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.05);
+      color: #fff; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 15px;
+      cursor: pointer; text-decoration: none; transition: all .2s;
+    }
+    .btn-outline:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.3); }
+    .btn-shimmer.lg { padding: 14px 36px; font-size: 16px; }
 
-    .hero-3d-layer {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      opacity: .7;
+    /* ── Section shared ── */
+    section { padding: 80px 48px; max-width: 1200px; margin: 0 auto; }
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--primary); margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: 'Space Grotesk', sans-serif; font-weight: 700;
+      font-size: clamp(28px, 4vw, 42px); margin-bottom: 48px; letter-spacing: -.01em;
     }
 
-    @keyframes rb-card-in {
-      0% { opacity: 0; transform: translateY(18px) scale(.985); }
-      100% { opacity: 1; transform: translateY(0) scale(1); }
+    /* ── How it works ── */
+    .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .step-card {
+      background: var(--surface); border-radius: 20px; padding: 32px;
+      border: 1px solid rgba(255,255,255,.04);
+      transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease;
     }
-    .rb-grid {
-      display: grid;
-      grid-template-columns: repeat(1, minmax(0, 1fr));
-      gap: 1rem;
+    .step-card:hover { transform: translateY(-6px); box-shadow: 0 20px 60px -15px rgba(0,0,0,.4); border-color: rgba(225,48,108,.2); }
+    .step-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 40px; height: 40px; border-radius: 12px; font-family: 'Space Grotesk', sans-serif;
+      font-weight: 800; font-size: 16px; margin-bottom: 20px;
     }
-    @media (min-width: 768px) {
-      .rb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .step-badge-1 { background: rgba(131,58,180,.2); color: var(--ig-purple); }
+    .step-badge-2 { background: rgba(225,48,108,.2); color: var(--ig-pink); }
+    .step-badge-3 { background: rgba(252,176,69,.15); color: var(--ig-orange); }
+    .step-icon-wrap {
+      width: 64px; height: 64px; border-radius: 16px; margin-bottom: 20px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--surface-high);
     }
-    .rb-card {
-      border: 1px solid rgba(255, 255, 255, .12);
-      background: linear-gradient(140deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-      border-radius: 1rem;
-      padding: 1rem;
-      min-height: 160px;
-      box-shadow: 0 12px 28px -16px rgba(131, 58, 180, .45);
-      transition: transform .35s cubic-bezier(.2,.9,.3,1), border-color .35s ease;
-      animation: rb-card-in .55s cubic-bezier(.22,1,.36,1) both;
+    .step-icon-wrap .material-symbols-outlined { font-size: 32px; }
+    .step-icon-1 { color: var(--ig-purple); }
+    .step-icon-2 { color: var(--primary); }
+    .step-icon-3 { color: var(--ig-orange); }
+    .step-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; margin-bottom: 10px; }
+    .step-desc { color: var(--on-surface-var); font-size: 14px; line-height: 1.7; }
+
+    /* ── Chat demo ── */
+    .demo-wrap { display: flex; justify-content: center; }
+    .chat-demo-card {
+      width: 100%; max-width: 560px; background: var(--surface);
+      border-radius: 24px; border: 1px solid rgba(255,255,255,.06);
+      overflow: hidden; box-shadow: 0 30px 80px -20px rgba(0,0,0,.5);
     }
-    .rb-card:hover {
-      transform: translateY(-6px);
-      border-color: rgba(225,48,108,.45);
+    .chat-demo-header {
+      padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.05);
+      display: flex; align-items: center; gap: 12px;
     }
-    .rb-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: .35rem;
-      border: 1px solid rgba(255,255,255,.14);
-      border-radius: 999px;
-      padding: .25rem .55rem;
-      color: #d1d5db;
-      font-size: .72rem;
+    .demo-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--ig-purple), var(--ig-red)); }
+    .demo-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; }
+    .demo-status { font-size: 11px; color: #4ade80; display: flex; align-items: center; gap: 4px; }
+    .demo-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; display: inline-block; }
+    .chat-demo-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .msg { display: flex; gap: 10px; }
+    .msg.user { flex-direction: row-reverse; }
+    .msg-avatar { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; }
+    .msg-avatar.ai { background: linear-gradient(135deg, var(--ig-purple), var(--ig-red)); }
+    .msg-avatar.user { background: linear-gradient(135deg, var(--ig-pink), var(--ig-orange)); }
+    .msg-bubble { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; }
+    .msg-bubble.ai { background: var(--surface-high); color: var(--on-surface); }
+    .msg-bubble.user {
+      background: linear-gradient(135deg, var(--ig-purple), var(--ig-red), var(--ig-orange));
+      color: #fff;
+    }
+    .chat-demo-footer {
+      padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.05);
+      display: flex; gap: 10px; align-items: center;
+    }
+    .demo-input {
+      flex: 1; background: var(--surface-highest); border: 1px solid rgba(255,255,255,.06);
+      border-radius: 12px; padding: 10px 14px; color: var(--on-surface-var); font-size: 14px; outline: none;
+    }
+    .demo-send {
+      width: 36px; height: 36px; border-radius: 50%; border: none; cursor: default;
+      background: linear-gradient(135deg, var(--ig-purple), var(--ig-red));
+      display: flex; align-items: center; justify-content: center; color: #fff;
+    }
+
+    /* ── Pricing ── */
+    .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .price-card {
+      background: var(--surface); border-radius: 20px; padding: 36px 28px;
+      border: 1px solid rgba(255,255,255,.04); position: relative;
+      transition: transform .3s, box-shadow .3s;
+    }
+    .price-card:hover { transform: translateY(-4px); box-shadow: 0 20px 60px -15px rgba(0,0,0,.4); }
+    .price-card.popular {
+      border-color: rgba(225,48,108,.3);
+      box-shadow: 0 0 0 1px rgba(225,48,108,.2), 0 20px 60px -15px rgba(131,58,180,.2);
+    }
+    .popular-badge {
+      position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(90deg, var(--ig-purple), var(--ig-red));
+      color: #fff; font-size: 11px; font-weight: 700; padding: 4px 14px; border-radius: 9999px;
+      white-space: nowrap;
+    }
+    .price-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; color: var(--on-surface-var); margin-bottom: 12px; }
+    .price-amount { font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: 48px; color: #fff; line-height: 1; }
+    .price-period { font-size: 14px; color: var(--on-surface-var); margin-bottom: 28px; }
+    .price-features { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
+    .price-features li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--on-surface-var); }
+    .price-features li .material-symbols-outlined { font-size: 18px; color: var(--primary); }
+    .price-btn { width: 100%; padding: 13px; border-radius: 9999px; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; transition: all .2s; }
+    .price-btn.primary { background-size: 200% auto; background-image: linear-gradient(90deg, var(--ig-purple), var(--ig-red), var(--ig-orange), var(--ig-red), var(--ig-purple)); animation: shimmer 4s linear infinite; color: #fff; border: none; }
+    .price-btn.ghost { background: transparent; border: 1px solid rgba(255,255,255,.15); color: #fff; }
+    .price-btn.ghost:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.3); }
+
+    /* ── CTA Banner ── */
+    .cta-banner {
+      margin: 0 48px 80px; border-radius: 24px; padding: 64px 48px; text-align: center;
+      background: linear-gradient(135deg, rgba(131,58,180,.15), rgba(253,29,29,.1), rgba(252,176,69,.08));
+      border: 1px solid rgba(255,255,255,.06);
+    }
+    .cta-title { font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: clamp(28px, 4vw, 44px); margin-bottom: 16px; }
+    .cta-sub { color: var(--on-surface-var); font-size: 16px; margin-bottom: 36px; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid rgba(255,255,255,.05); padding: 32px 48px;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+    }
+    .footer-copy { font-size: 13px; color: var(--on-surface-var); }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { font-size: 13px; color: var(--on-surface-var); text-decoration: none; transition: color .2s; }
+    .footer-links a:hover { color: #fff; }
+
+    /* ── Reveal animation ── */
+    .reveal { opacity: 0; transform: translateY(28px); transition: opacity .6s cubic-bezier(.22,1,.36,1), transform .6s cubic-bezier(.22,1,.36,1); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 900px) {
+      nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      section { padding: 60px 20px; }
+      .steps-grid, .pricing-grid { grid-template-columns: 1fr; }
+      .cta-banner { margin: 0 20px 60px; padding: 40px 24px; }
+      footer { flex-direction: column; text-align: center; }
     }
   </style>
-  <script>
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            ig: { purple: "#833ab4", red: "#fd1d1d", orange: "#fcb045", pink: "#e1306c" },
-            "background-dark": "#0a0a0a"
-          },
-          fontFamily: { display: ["Space Grotesk"] },
-          borderRadius: { DEFAULT: "0.5rem", lg: "1rem", xl: "1.5rem", full: "9999px" },
-        },
-      },
-    };
-  </script>
 </head>
+<body>
+  <div class="bg-canvas"></div>
+  <div class="dot-grid"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
 
-<body class="ig-bg font-display text-gray-200 overflow-x-hidden">
-  <!-- floating orbs â€” instagram colours -->
-  <div class="orb w-[500px] h-[500px] bg-[#833ab4] top-[-100px] left-[-150px] fixed" style="animation:float-1 12s ease-in-out infinite"></div>
-  <div class="orb w-[400px] h-[400px] bg-[#fd1d1d]/30 bottom-[-80px] right-[-100px] fixed" style="animation:float-2 14s ease-in-out infinite"></div>
-  <div class="orb w-[350px] h-[350px] bg-[#fcb045]/20 top-[40%] left-[60%] fixed" style="animation:float-3 16s ease-in-out infinite"></div>
-
-  <div class="relative flex min-h-screen w-full flex-col grid-pattern">
-
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HEADER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-    <header class="sticky top-0 z-50 flex items-center justify-between px-6 sm:px-10 py-4 border-b border-white/5 backdrop-blur-xl bg-black/40">
-      <div class="flex items-center gap-3 text-white">
-        <!-- Instagram-style logo -->
-        <div class="ig-ring ig-ring-anim">
-          <div class="h-8 w-8 rounded-full bg-black flex items-center justify-center">
-            <span class="material-symbols-outlined text-lg ig-text" style="-webkit-text-fill-color:unset;background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">smart_toy</span>
+  <div class="page-wrap">
+    <!-- NAV -->
+    <nav>
+      <a href="/" class="nav-logo">
+        <div class="insta-ring-sm">
+          <div class="ring-inner">
+            <span class="material-symbols-outlined" style="font-size:18px;background:linear-gradient(135deg,var(--ig-purple),var(--ig-red),var(--ig-orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">smart_toy</span>
           </div>
         </div>
-        <h2 class="text-xl font-bold tracking-tight">AI Persona</h2>
+        <span class="logo-text">AI Persona</span>
+      </a>
+      <div class="nav-links">
+        <a href="#how-it-works">How it works</a>
+        <a href="#pricing">Pricing</a>
+        <a href="mailto:contact@aipersona.app">Contact</a>
       </div>
-      <div class="flex flex-1 items-center justify-end gap-6">
-        <nav class="hidden items-center gap-8 md:flex">
-          <a class="text-sm font-medium text-gray-400 hover:text-ig-pink transition-colors duration-300" href="#how-it-works">How it works</a>
-          <a class="text-sm font-medium text-gray-400 hover:text-ig-pink transition-colors duration-300" href="#pricing">Pricing</a>
-          <a class="text-sm font-medium text-gray-400 hover:text-ig-pink transition-colors duration-300" href="#contact">Contact</a>
-        </nav>
-        <a href="login.html" class="btn-ig flex items-center justify-center rounded-full h-10 px-6 text-white text-sm font-bold shadow-lg shadow-ig-pink/20 hover:shadow-ig-pink/40 transition-shadow duration-300">
-          <span>Get started</span>
-          <span class="material-symbols-outlined ml-1 text-base">arrow_forward</span>
-        </a>
-      </div>
-    </header>
+      <a href="/login.html" class="btn-shimmer">Get started →</a>
+    </nav>
 
-    <main class="flex-1 px-4 sm:px-10 lg:px-20 xl:px-40 py-10">
-      <div class="mx-auto flex max-w-5xl flex-col gap-24">
-
-        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HERO â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-        <section class="relative flex min-h-[540px] flex-col items-center justify-center gap-8 rounded-3xl overflow-hidden p-10 text-center">
-          <div id="hero-3d" class="hero-3d-layer"></div>
-          <!-- abstract mesh background -->
-          <div class="absolute inset-0 opacity-[.08]"
-            style="background:repeating-conic-gradient(from 0deg at 50% 50%, #833ab4 0% 25%, #fd1d1d 25% 50%, #fcb045 50% 75%, #833ab4 75% 100%);
-                   background-size:120px 120px; filter:blur(1px);"></div>
-          <div class="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80"></div>
-
-          <!-- hero Instagram icon -->
-          <div class="relative z-10 animate-hero">
-            <div class="ig-ring ig-ring-anim mx-auto">
-              <div class="h-20 w-20 rounded-full bg-black flex items-center justify-center">
-                <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stop-color="#fcb045"/>
-                      <stop offset="30%" stop-color="#fd1d1d"/>
-                      <stop offset="60%" stop-color="#e1306c"/>
-                      <stop offset="100%" stop-color="#833ab4"/>
-                    </linearGradient>
-                  </defs>
-                  <rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#ig-grad)" stroke-width="1.5" fill="none"/>
-                  <circle cx="12" cy="12" r="5" stroke="url(#ig-grad)" stroke-width="1.5" fill="none"/>
-                  <circle cx="17.5" cy="6.5" r="1.25" fill="url(#ig-grad)"/>
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div class="relative z-10 flex flex-col gap-5 max-w-3xl">
-            <p class="animate-hero text-sm font-semibold uppercase tracking-widest text-ig-pink">Powered by Groq AI</p>
-            <h1 class="animate-hero animate-hero-d1 text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl leading-tight">
-              Turn Any Profile Into a <span class="ig-text">Real-Time Persona</span>
-            </h1>
-            <p class="animate-hero animate-hero-d2 mx-auto max-w-2xl text-base text-gray-300 sm:text-lg leading-relaxed">
-              Clone Instagram tone, attitude, and speaking style, then talk by text or voice with responses that feel natural and fast.
-            </p>
-          </div>
-          <a href="login.html" class="animate-hero animate-hero-d3 relative z-10 btn-ig flex items-center justify-center rounded-full h-14 px-8 text-white text-lg font-bold shadow-2xl shadow-ig-pink/30 hover:shadow-ig-pink/50 transition-all duration-500 hover:scale-105 active:scale-95">
-            <span>Get started free</span>
-            <span class="material-symbols-outlined ml-2">rocket_launch</span>
+    <!-- HERO -->
+    <div class="hero" style="min-height:600px;">
+      <canvas id="hero-canvas"></canvas>
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="material-symbols-outlined">bolt</span>
+          Powered by Groq AI + ElevenLabs
+        </div>
+        <h1 class="hero-title">
+          Turn Any Profile Into a<br>
+          <span class="grad-text">Real-Time Persona</span>
+        </h1>
+        <p class="hero-sub">Clone any Instagram account's tone, attitude, and speaking style — then chat by text or voice with AI responses that feel instant and human.</p>
+        <div class="hero-cta">
+          <a href="/login.html" class="btn-shimmer lg">Get started free 🚀</a>
+          <a href="#how-it-works" class="btn-outline">
+            <span class="material-symbols-outlined" style="font-size:18px">play_circle</span>
+            See how it works
           </a>
-          <!-- decorative rings -->
-          <div class="absolute -bottom-16 -right-16 w-52 h-52 border border-ig-purple/10 rounded-full"></div>
-          <div class="absolute -bottom-8 -right-8 w-32 h-32 border border-ig-pink/15 rounded-full"></div>
-          <div class="absolute -top-12 -left-12 w-40 h-40 border border-ig-orange/10 rounded-full"></div>
-        </section>
-
-        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HOW IT WORKS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-        <section id="how-it-works" class="flex flex-col gap-16 reveal">
-          <div class="flex flex-col gap-3 text-center">
-            <p class="text-sm font-semibold uppercase tracking-widest text-ig-pink">Simple 3-step process</p>
-            <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">How it works</h2>
-            <p class="mx-auto max-w-3xl text-base text-gray-400 sm:text-lg">We map profile context and captions into a stable persona prompt so each response stays in character.</p>
-          </div>
-          <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            <!-- Card 1 â€” Profile Analysis -->
-            <div class="glass rounded-2xl p-7 card-hover group">
-              <div class="w-full aspect-[4/3] rounded-xl overflow-hidden mb-6 bg-gradient-to-br from-ig-purple/10 to-ig-pink/5 flex items-center justify-center border border-white/5">
-                <svg class="w-28 h-28 icon-bob" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="card1-g" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stop-color="#fcb045" stop-opacity=".9"/>
-                      <stop offset="50%" stop-color="#fd1d1d" stop-opacity=".9"/>
-                      <stop offset="100%" stop-color="#833ab4" stop-opacity=".9"/>
-                    </linearGradient>
-                  </defs>
-                  <!-- Instagram profile card -->
-                  <rect x="15" y="18" width="90" height="84" rx="14" stroke="url(#card1-g)" stroke-width="2" fill="none"/>
-                  <circle cx="45" cy="48" r="12" stroke="url(#card1-g)" stroke-width="2" fill="none"/>
-                  <rect x="65" y="40" width="28" height="4" rx="2" fill="url(#card1-g)" opacity=".7"/>
-                  <rect x="65" y="50" width="20" height="3" rx="1.5" fill="url(#card1-g)" opacity=".4"/>
-                  <!-- bars = data -->
-                  <rect x="30" y="72" width="12" height="18" rx="3" fill="url(#card1-g)" opacity=".5"/>
-                  <rect x="48" y="66" width="12" height="24" rx="3" fill="url(#card1-g)" opacity=".7"/>
-                  <rect x="66" y="60" width="12" height="30" rx="3" fill="url(#card1-g)" opacity=".9"/>
-                  <!-- magnifying glass -->
-                  <circle cx="96" cy="28" r="10" stroke="url(#card1-g)" stroke-width="2" fill="none"/>
-                  <line x1="103" y1="36" x2="110" y2="43" stroke="url(#card1-g)" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-              </div>
-              <div class="flex items-start gap-3">
-                <span class="flex items-center justify-center w-9 h-9 rounded-full bg-ig-purple/20 text-ig-purple text-sm font-bold shrink-0 ring-1 ring-ig-purple/30">1</span>
-                <div>
-                  <h3 class="text-lg font-bold text-white group-hover:text-ig-purple transition-colors duration-300">Profile Analysis</h3>
-                  <p class="text-sm text-gray-400 mt-1">We parse public profile metadata, bio signals, and recent caption patterns.</p>
-                </div>
-              </div>
-            </div>
-            <!-- Card 2 â€” Persona Creation -->
-            <div class="glass rounded-2xl p-7 card-hover group">
-              <div class="w-full aspect-[4/3] rounded-xl overflow-hidden mb-6 bg-gradient-to-br from-ig-red/10 to-ig-pink/5 flex items-center justify-center border border-white/5">
-                <svg class="w-28 h-28 icon-bob" style="animation-delay:-.8s" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="card2-g" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stop-color="#fcb045" stop-opacity=".9"/>
-                      <stop offset="50%" stop-color="#e1306c" stop-opacity=".9"/>
-                      <stop offset="100%" stop-color="#833ab4" stop-opacity=".9"/>
-                    </linearGradient>
-                  </defs>
-                  <!-- Person silhouette -->
-                  <circle cx="46" cy="38" r="14" stroke="url(#card2-g)" stroke-width="2" fill="none"/>
-                  <path d="M22 82c0-13.25 10.75-24 24-24s24 10.75 24 24" stroke="url(#card2-g)" stroke-width="2" fill="none" stroke-linecap="round"/>
-                  <!-- AI brain / sparks -->
-                  <circle cx="82" cy="42" r="18" stroke="url(#card2-g)" stroke-width="2" fill="none" stroke-dasharray="4 3"/>
-                  <path d="M76 42c0-3.3 2.7-6 6-6s6 2.7 6 6-2.7 6-6 6" stroke="url(#card2-g)" stroke-width="2" fill="none"/>
-                  <line x1="82" y1="30" x2="82" y2="24" stroke="url(#card2-g)" stroke-width="2" stroke-linecap="round"/>
-                  <line x1="94" y1="34" x2="98" y2="30" stroke="url(#card2-g)" stroke-width="2" stroke-linecap="round"/>
-                  <line x1="70" y1="34" x2="66" y2="30" stroke="url(#card2-g)" stroke-width="2" stroke-linecap="round"/>
-                  <!-- connection arrow -->
-                  <path d="M58 50l10-4" stroke="url(#card2-g)" stroke-width="1.5" stroke-dasharray="3 2" opacity=".6"/>
-                  <!-- sparkle -->
-                  <circle cx="92" cy="72" r="2" fill="url(#card2-g)" opacity=".6"/>
-                  <circle cx="78" cy="76" r="1.5" fill="url(#card2-g)" opacity=".4"/>
-                  <circle cx="86" cy="80" r="1" fill="url(#card2-g)" opacity=".3"/>
-                </svg>
-              </div>
-              <div class="flex items-start gap-3">
-                <span class="flex items-center justify-center w-9 h-9 rounded-full bg-ig-pink/20 text-ig-pink text-sm font-bold shrink-0 ring-1 ring-ig-pink/30">2</span>
-                <div>
-                  <h3 class="text-lg font-bold text-white group-hover:text-ig-pink transition-colors duration-300">Persona Creation</h3>
-                  <p class="text-sm text-gray-400 mt-1">Groq builds a response engine tuned to persona vibe, pacing, and language style.</p>
-                </div>
-              </div>
-            </div>
-            <!-- Card 3 â€” Chat & Voice -->
-            <div class="glass rounded-2xl p-7 card-hover group">
-              <div class="w-full aspect-[4/3] rounded-xl overflow-hidden mb-6 bg-gradient-to-br from-ig-orange/10 to-ig-red/5 flex items-center justify-center border border-white/5">
-                <svg class="w-28 h-28 icon-bob" style="animation-delay:-1.6s" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="card3-g" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stop-color="#fcb045" stop-opacity=".9"/>
-                      <stop offset="50%" stop-color="#fd1d1d" stop-opacity=".9"/>
-                      <stop offset="100%" stop-color="#833ab4" stop-opacity=".9"/>
-                    </linearGradient>
-                  </defs>
-                  <!-- Chat bubble 1 -->
-                  <rect x="14" y="20" width="52" height="28" rx="10" stroke="url(#card3-g)" stroke-width="2" fill="none"/>
-                  <circle cx="30" cy="34" r="2" fill="url(#card3-g)" opacity=".6"/>
-                  <circle cx="40" cy="34" r="2" fill="url(#card3-g)" opacity=".6"/>
-                  <circle cx="50" cy="34" r="2" fill="url(#card3-g)" opacity=".6"/>
-                  <!-- Chat bubble 2 (reply) -->
-                  <rect x="54" y="56" width="52" height="28" rx="10" stroke="url(#card3-g)" stroke-width="2" fill="none"/>
-                  <rect x="64" y="66" width="20" height="3" rx="1.5" fill="url(#card3-g)" opacity=".5"/>
-                  <rect x="64" y="73" width="30" height="3" rx="1.5" fill="url(#card3-g)" opacity=".3"/>
-                  <!-- Voice waves -->
-                  <rect x="18" y="76" width="3" height="14" rx="1.5" fill="url(#card3-g)" opacity=".5"/>
-                  <rect x="24" y="72" width="3" height="22" rx="1.5" fill="url(#card3-g)" opacity=".7"/>
-                  <rect x="30" y="68" width="3" height="30" rx="1.5" fill="url(#card3-g)" opacity=".9"/>
-                  <rect x="36" y="74" width="3" height="18" rx="1.5" fill="url(#card3-g)" opacity=".6"/>
-                  <rect x="42" y="78" width="3" height="10" rx="1.5" fill="url(#card3-g)" opacity=".4"/>
-                </svg>
-              </div>
-              <div class="flex items-start gap-3">
-                <span class="flex items-center justify-center w-9 h-9 rounded-full bg-ig-orange/20 text-ig-orange text-sm font-bold shrink-0 ring-1 ring-ig-orange/30">3</span>
-                <div>
-                  <h3 class="text-lg font-bold text-white group-hover:text-ig-orange transition-colors duration-300">Start Chatting</h3>
-                  <p class="text-sm text-gray-400 mt-1">Chat naturally and hear replies with ElevenLabs voice output matched to persona energy.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="reveal">
-          <div class="glass rounded-2xl p-6 sm:p-8">
-            <div class="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-widest text-ig-pink">React Bits</p>
-                <h3 class="text-2xl font-bold text-white">Animated Persona Blocks</h3>
-              </div>
-              <span class="rb-pill">React island</span>
-            </div>
-            <div id="react-bits-root"></div>
-          </div>
-        </section>
-
-        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• DEMO CHAT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-        <section class="reveal">
-          <div class="glass rounded-2xl p-8 max-w-lg mx-auto">
-            <h3 class="text-xl font-bold text-white mb-6 text-center">Live Chat Preview</h3>
-            <div class="flex flex-col gap-4 h-72 overflow-y-auto p-4 border rounded-xl border-white/10 bg-black/20">
-              <div class="flex items-start gap-3">
-                <div class="h-8 w-8 flex-shrink-0 rounded-full bg-gradient-to-br from-ig-purple to-ig-pink flex items-center justify-center">
-                  <span class="material-symbols-outlined text-white text-sm">smart_toy</span>
-                </div>
-                <div class="rounded-xl bg-white/5 border border-white/5 p-3 text-sm text-gray-300">Hey, what's up? Ask me anything about my life or content.</div>
-              </div>
-              <div class="flex items-start gap-3 ml-auto flex-row-reverse">
-                <div class="h-8 w-8 flex-shrink-0 rounded-full bg-gradient-to-br from-ig-orange to-ig-red flex items-center justify-center text-xs font-bold text-white">U</div>
-                <div class="rounded-xl bg-gradient-to-r from-ig-purple to-ig-pink text-white p-3 text-sm">Tell me about yourself!</div>
-              </div>
-              <div class="flex items-start gap-3">
-                <div class="h-8 w-8 flex-shrink-0 rounded-full bg-gradient-to-br from-ig-purple to-ig-pink flex items-center justify-center">
-                  <span class="material-symbols-outlined text-white text-sm">smart_toy</span>
-                </div>
-                <div class="rounded-xl bg-white/5 border border-white/5 p-3 text-sm text-gray-300">I'm a content creator who loves travel and fitness. Been at this for years and it never gets old.</div>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 mt-4">
-              <input type="text" disabled class="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-gray-400 placeholder-gray-600 cursor-not-allowed" placeholder="Type your message..." />
-              <button disabled class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-ig-purple to-ig-pink text-white cursor-not-allowed">
-                <span class="material-symbols-outlined text-lg">send</span>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PRICING â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-        <section id="pricing" class="flex flex-col gap-12 reveal">
-          <div class="flex flex-col gap-3 text-center">
-            <p class="text-sm font-semibold uppercase tracking-widest text-ig-pink">Plans</p>
-            <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">Pricing</h2>
-            <p class="mx-auto max-w-3xl text-base text-gray-400 sm:text-lg">Choose a plan that fits your needs.</p>
-          </div>
-          <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div class="glass rounded-2xl p-8 pricing-glow">
-              <span class="material-symbols-outlined text-4xl text-ig-purple mb-4">person</span>
-              <h3 class="text-xl font-bold text-white mb-1">Free</h3>
-              <p class="text-3xl font-bold text-white mb-4">$0<span class="text-sm font-normal text-gray-400">/mo</span></p>
-              <p class="text-sm text-gray-400 mb-6">5 conversations per day. Text chat only.</p>
-              <a href="login.html" class="block text-center py-2.5 px-4 rounded-xl border border-white/10 text-sm font-semibold text-gray-300 hover:bg-white/5 transition-all duration-300">Get started</a>
-            </div>
-            <div class="relative glass rounded-2xl p-8 pricing-glow ring-2 ring-ig-pink/40">
-              <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-gradient-to-r from-ig-purple to-ig-pink rounded-full text-xs font-bold text-white">Popular</div>
-              <span class="material-symbols-outlined text-4xl text-ig-pink mb-4">verified</span>
-              <h3 class="text-xl font-bold text-white mb-1">Pro</h3>
-              <p class="text-3xl font-bold text-white mb-4">$9<span class="text-sm font-normal text-gray-400">/mo</span></p>
-              <p class="text-sm text-gray-400 mb-6">Unlimited chats. Voice + text. Priority speed.</p>
-              <a href="login.html" class="block text-center py-2.5 px-4 rounded-xl bg-gradient-to-r from-ig-purple to-ig-pink text-sm font-bold text-white hover:opacity-90 transition-all duration-300 shadow-lg shadow-ig-pink/20">Get started</a>
-            </div>
-            <div class="glass rounded-2xl p-8 pricing-glow">
-              <span class="material-symbols-outlined text-4xl text-ig-orange mb-4">apartment</span>
-              <h3 class="text-xl font-bold text-white mb-1">Enterprise</h3>
-              <p class="text-3xl font-bold text-white mb-4">$29<span class="text-sm font-normal text-gray-400">/mo</span></p>
-              <p class="text-sm text-gray-400 mb-6">API access. Custom voices. Dedicated support.</p>
-              <a href="login.html" class="block text-center py-2.5 px-4 rounded-xl border border-white/10 text-sm font-semibold text-gray-300 hover:bg-white/5 transition-all duration-300">Get started</a>
-            </div>
-          </div>
-        </section>
-
-        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CTA â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-        <section id="contact" class="glass rounded-2xl py-16 px-8 text-center reveal">
-          <div class="flex flex-col items-center gap-5">
-            <div class="ig-ring ig-ring-anim">
-              <div class="h-16 w-16 rounded-full bg-black flex items-center justify-center">
-                <span class="material-symbols-outlined text-3xl ig-text" style="-webkit-text-fill-color:unset;background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">rocket_launch</span>
-              </div>
-            </div>
-            <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">Ready to meet your <span class="ig-text">AI Persona</span>?</h2>
-            <p class="max-w-2xl text-base text-gray-400">Enter any Instagram username and start chatting in seconds. Sign up free to begin.</p>
-            <a href="login.html" class="mt-2 btn-ig flex items-center justify-center rounded-full h-12 px-8 text-white text-sm font-bold shadow-lg shadow-ig-pink/20 hover:shadow-ig-pink/40 hover:scale-105 active:scale-95 transition-all duration-300">
-              <span>Get started</span>
-              <span class="material-symbols-outlined ml-1 text-base">arrow_forward</span>
-            </a>
-          </div>
-        </section>
-
+        </div>
       </div>
-    </main>
+    </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• FOOTER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-    <footer class="border-t border-white/5 mt-10">
-      <div class="mx-auto max-w-5xl px-5 py-10">
-        <div class="flex flex-col items-center justify-between gap-6 sm:flex-row">
-          <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-            <a class="text-sm text-gray-500 hover:text-ig-pink transition-colors duration-300" href="#">Terms of Service</a>
-            <a class="text-sm text-gray-500 hover:text-ig-pink transition-colors duration-300" href="#">Privacy Policy</a>
-            <a class="text-sm text-gray-500 hover:text-ig-pink transition-colors duration-300" href="#">Contact Us</a>
+    <!-- HOW IT WORKS -->
+    <section id="how-it-works">
+      <div class="section-label reveal">Simple 3-Step Process</div>
+      <h2 class="section-title reveal">How it works</h2>
+      <div class="steps-grid">
+        <div class="step-card reveal">
+          <div class="step-badge step-badge-1">01</div>
+          <div class="step-icon-wrap"><span class="material-symbols-outlined step-icon-1">person_search</span></div>
+          <div class="step-title">Profile Analysis</div>
+          <p class="step-desc">Enter any public Instagram username. Our engine scans bio, caption style, posting rhythm, follower metrics, and tone signals.</p>
+        </div>
+        <div class="step-card reveal">
+          <div class="step-badge step-badge-2">02</div>
+          <div class="step-icon-wrap"><span class="material-symbols-outlined step-icon-2">psychology</span></div>
+          <div class="step-title">Persona Creation</div>
+          <p class="step-desc">Groq's blazing-fast LLM reconstructs a living digital persona — mimicking personality traits, humor, and conversational patterns.</p>
+        </div>
+        <div class="step-card reveal">
+          <div class="step-badge step-badge-3">03</div>
+          <div class="step-icon-wrap"><span class="material-symbols-outlined step-icon-3">chat</span></div>
+          <div class="step-title">Start Chatting</div>
+          <p class="step-desc">Text chat with typewriter responses or switch to immersive voice mode powered by ElevenLabs for hyper-realistic audio.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIVE CHAT DEMO -->
+    <section style="padding-top:0;">
+      <div class="section-label reveal" style="text-align:center">Live Demo</div>
+      <h2 class="section-title reveal" style="text-align:center;margin-bottom:40px">See the experience</h2>
+      <div class="demo-wrap reveal">
+        <div class="chat-demo-card">
+          <div class="chat-demo-header">
+            <div class="demo-avatar"></div>
+            <div>
+              <div class="demo-name">@elonmusk — AI Persona</div>
+              <div class="demo-status">Active now</div>
+            </div>
           </div>
-          <div class="flex justify-center gap-4">
-            <a class="text-gray-500 hover:text-ig-pink transition-colors duration-300" href="#">
-              <svg fill="currentColor" height="22" viewBox="0 0 256 256" width="22" xmlns="http://www.w3.org/2000/svg">
-                <path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160ZM176,24H80A56.06,56.06,0,0,0,24,80v96a56.06,56.06,0,0,0,56,56h96a56.06,56.06,0,0,0,56-56V80A56.06,56.06,0,0,0,176,24Zm40,152a40,40,0,0,1-40,40H80a40,40,0,0,1-40-40V80A40,40,0,0,1,80,40h96a40,40,0,0,1,40,40ZM192,76a12,12,0,1,1-12-12A12,12,0,0,1,192,76Z"/>
-              </svg>
-            </a>
-            <a class="text-gray-500 hover:text-ig-pink transition-colors duration-300" href="#">
-              <svg fill="currentColor" height="22" viewBox="0 0 256 256" width="22" xmlns="http://www.w3.org/2000/svg">
-                <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm8,191.63V152h24a8,8,0,0,0,0-16H136V112a16,16,0,0,1,16-16h16a8,8,0,0,0,0-16H152a32,32,0,0,0-32,32v24H96a8,8,0,0,0,0,16h24v63.63a88,88,0,1,1,16,0Z"/>
-              </svg>
-            </a>
+          <div class="chat-demo-body">
+            <div class="msg">
+              <div class="msg-avatar ai"></div>
+              <div class="msg-bubble ai">The thing that bothers me most about critics is that they're never in the arena. If you're not building, you're just commenting.</div>
+            </div>
+            <div class="msg user">
+              <div class="msg-avatar user"></div>
+              <div class="msg-bubble user">What do you think about AI taking over jobs?</div>
+            </div>
+            <div class="msg">
+              <div class="msg-avatar ai"></div>
+              <div class="msg-bubble ai">AI will eliminate some jobs, create others. Net positive if we're smart about it. The real risk is humans not adapting fast enough. Retraining > complaining. 🚀</div>
+            </div>
+          </div>
+          <div class="chat-demo-footer">
+            <input class="demo-input" placeholder="Continue the conversation..." readonly />
+            <div class="demo-send"><span class="material-symbols-outlined" style="font-size:18px">send</span></div>
           </div>
         </div>
-        <p class="mt-6 text-center text-sm text-gray-600">&copy; 2026 AI Persona. All rights reserved.</p>
+      </div>
+    </section>
+
+    <!-- PRICING -->
+    <section id="pricing">
+      <div class="section-label reveal" style="text-align:center">Simple Pricing</div>
+      <h2 class="section-title reveal" style="text-align:center">Flexible plans</h2>
+      <div class="pricing-grid">
+        <div class="price-card reveal">
+          <div class="price-name">Free</div>
+          <div class="price-amount">$0</div>
+          <div class="price-period">/ month forever</div>
+          <ul class="price-features">
+            <li><span class="material-symbols-outlined">check_circle</span>1 Active Persona</li>
+            <li><span class="material-symbols-outlined">check_circle</span>100 Messages / day</li>
+            <li><span class="material-symbols-outlined">check_circle</span>Standard AI Speed</li>
+            <li><span class="material-symbols-outlined">check_circle</span>Text Chat Only</li>
+          </ul>
+          <button class="price-btn ghost" onclick="location.href='/login.html'">Get started free</button>
+        </div>
+        <div class="price-card popular reveal">
+          <div class="popular-badge">⭐ Most Popular</div>
+          <div class="price-name">Pro</div>
+          <div class="price-amount">$9</div>
+          <div class="price-period">/ month billed monthly</div>
+          <ul class="price-features">
+            <li><span class="material-symbols-outlined">check_circle</span>5 Active Personas</li>
+            <li><span class="material-symbols-outlined">check_circle</span>Unlimited Messaging</li>
+            <li><span class="material-symbols-outlined">check_circle</span>Priority Groq Access</li>
+            <li><span class="material-symbols-outlined">check_circle</span>Custom Voice Profiles</li>
+            <li><span class="material-symbols-outlined">check_circle</span>Voice Chat Mode</li>
+          </ul>
+          <button class="price-btn primary" onclick="location.href='/login.html'">Start Pro →</button>
+        </div>
+        <div class="price-card reveal">
+          <div class="price-name">Enterprise</div>
+          <div class="price-amount">$29</div>
+          <div class="price-period">/ month per seat</div>
+          <ul class="price-features">
+            <li><span class="material-symbols-outlined">check_circle</span>Unlimited Personas</li>
+            <li><span class="material-symbols-outlined">check_circle</span>Team Collaboration</li>
+            <li><span class="material-symbols-outlined">check_circle</span>API Direct Access</li>
+            <li><span class="material-symbols-outlined">check_circle</span>Priority Support</li>
+          </ul>
+          <button class="price-btn ghost" onclick="location.href='/login.html'">Contact us</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA BANNER -->
+    <div class="cta-banner reveal">
+      <h2 class="cta-title">Ready to clone your first persona?</h2>
+      <p class="cta-sub">Join thousands of creators who use AI Persona to understand, mimic, and engage with any voice.</p>
+      <a href="/login.html" class="btn-shimmer lg">Get started free 🚀</a>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      <div class="footer-copy">© 2025 AI Persona. Powered by Groq & ElevenLabs.</div>
+      <div class="footer-links">
+        <a href="#">Terms</a>
+        <a href="#">Privacy</a>
+        <a href="mailto:contact@aipersona.app">Contact</a>
       </div>
     </footer>
   </div>
 
   <script>
-    // Scroll-reveal via native IntersectionObserver
-    document.addEventListener('DOMContentLoaded', () => {
-      const reveals = document.querySelectorAll('.reveal');
-      if ('IntersectionObserver' in window) {
-        const io = new IntersectionObserver((entries) => {
-          entries.forEach((e, i) => {
-            if (e.isIntersecting) {
-              setTimeout(() => e.target.classList.add('visible'), i * 120);
-              io.unobserve(e.target);
-            }
-          });
-        }, { threshold: 0.15 });
-        reveals.forEach(el => io.observe(el));
-      } else {
-        reveals.forEach(el => el.classList.add('visible'));
+    // Scroll reveal
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+    // Three.js hero orb
+    (() => {
+      const canvas = document.getElementById('hero-canvas');
+      if (!canvas || typeof THREE === 'undefined') return;
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+      camera.position.z = 5;
+
+      const geo = new THREE.IcosahedronGeometry(1.8, 2);
+      const mat = new THREE.MeshLambertMaterial({ color: 0x833ab4, emissive: 0x1a0a2e, wireframe: true, transparent: true, opacity: 0.6 });
+      const sphere = new THREE.Mesh(geo, mat);
+      scene.add(sphere);
+      scene.add(new THREE.DirectionalLight(0xff8aa5, 1.5));
+      scene.add(new THREE.AmbientLight(0x833ab4, 0.5));
+
+      function resize() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        renderer.setSize(rect.width, rect.height);
+        camera.aspect = rect.width / rect.height;
+        camera.updateProjectionMatrix();
       }
+      resize();
+      window.addEventListener('resize', resize);
 
-      const heroLayer = document.getElementById('hero-3d');
-      if (heroLayer && window.THREE) {
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(55, heroLayer.clientWidth / heroLayer.clientHeight, 0.1, 1000);
-        camera.position.set(0, 0, 34);
+      let mouseX = 0, mouseY = 0;
+      document.addEventListener('mousemove', e => { mouseX = (e.clientX / innerWidth - .5) * 2; mouseY = (e.clientY / innerHeight - .5) * 2; });
 
-        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
-        renderer.setSize(heroLayer.clientWidth, heroLayer.clientHeight);
-        heroLayer.appendChild(renderer.domElement);
-
-        const group = new THREE.Group();
-        scene.add(group);
-
-        const pointCount = 1700;
-        const positions = new Float32Array(pointCount * 3);
-        for (let i = 0; i < pointCount; i++) {
-          const radius = 9 + Math.random() * 6;
-          const theta = Math.random() * Math.PI * 2;
-          const phi = Math.acos((Math.random() * 2) - 1);
-          positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-          positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-          positions[i * 3 + 2] = radius * Math.cos(phi);
-        }
-
-        const pointsGeometry = new THREE.BufferGeometry();
-        pointsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        const pointsMaterial = new THREE.PointsMaterial({
-          color: 0xe1306c,
-          size: 0.08,
-          transparent: true,
-          opacity: 0.9
-        });
-        const points = new THREE.Points(pointsGeometry, pointsMaterial);
-        group.add(points);
-
-        const ringGeometry = new THREE.TorusGeometry(11.5, 0.05, 12, 140);
-        const ringMaterial = new THREE.MeshBasicMaterial({
-          color: 0xfcb045,
-          transparent: true,
-          opacity: 0.22
-        });
-        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-        ring.rotation.x = 1.18;
-        group.add(ring);
-
-        const ring2 = ring.clone();
-        ring2.material = ringMaterial.clone();
-        ring2.material.color = new THREE.Color(0x833ab4);
-        ring2.material.opacity = 0.18;
-        ring2.scale.set(0.88, 0.88, 0.88);
-        ring2.rotation.x = 0.75;
-        ring2.rotation.y = 0.5;
-        group.add(ring2);
-
-        let pointerX = 0;
-        let pointerY = 0;
-        window.addEventListener('pointermove', (e) => {
-          pointerX = (e.clientX / window.innerWidth - 0.5) * 0.9;
-          pointerY = (e.clientY / window.innerHeight - 0.5) * 0.6;
-        });
-
-        function onResize() {
-          if (!heroLayer) return;
-          const w = heroLayer.clientWidth || 1;
-          const h = heroLayer.clientHeight || 1;
-          camera.aspect = w / h;
-          camera.updateProjectionMatrix();
-          renderer.setSize(w, h);
-        }
-        window.addEventListener('resize', onResize);
-
-        function tick() {
-          group.rotation.y += 0.0021;
-          group.rotation.x += 0.00085;
-          group.rotation.y += (pointerX - group.rotation.y) * 0.01;
-          group.rotation.x += (-pointerY - group.rotation.x) * 0.01;
-          ring.rotation.z += 0.0017;
-          ring2.rotation.z -= 0.0013;
-          renderer.render(scene, camera);
-          requestAnimationFrame(tick);
-        }
-        tick();
-      }
-
-      // Progressive React island: modern animated cards without affecting existing page flow.
-      const bitsRoot = document.getElementById('react-bits-root');
-      if (bitsRoot && window.React && window.ReactDOM) {
-        const h = window.React.createElement;
-        const useEffect = window.React.useEffect;
-        const useState = window.React.useState;
-
-        function BitsCard(props) {
-          return h('article', {
-            className: 'rb-card',
-            style: { animationDelay: `${props.delay || 0}ms` }
-          }, [
-            h('div', { key: 't', className: 'text-sm font-semibold text-white' }, props.title),
-            h('p', { key: 'd', className: 'mt-2 text-sm text-gray-300' }, props.desc),
-            h('div', { key: 'm', className: 'mt-4 text-xs text-ig-pink font-medium' }, props.meta)
-          ]);
-        }
-
-        function ReactBitsPanel() {
-          const [online, setOnline] = useState(false);
-          useEffect(() => {
-            const id = setTimeout(() => setOnline(true), 300);
-            return () => clearTimeout(id);
-          }, []);
-
-          return h('div', null, [
-            h('div', { key: 's', className: 'mb-4 flex items-center gap-2 text-sm' }, [
-              h('span', {
-                key: 'dot',
-                style: {
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '999px',
-                  background: online ? '#22c55e' : '#f59e0b',
-                  boxShadow: online ? '0 0 14px #22c55e' : '0 0 10px #f59e0b'
-                }
-              }),
-              h('span', { key: 'txt', className: 'text-gray-300' }, online ? 'Animation engine active' : 'Booting motion engine...')
-            ]),
-            h('div', { key: 'g', className: 'rb-grid' }, [
-              h(BitsCard, { key: 'a', delay: 40, title: 'Intent Pulse', desc: 'Tracks conversation mood and keeps response energy coherent across turns.', meta: 'Stateful style memory' }),
-              h(BitsCard, { key: 'b', delay: 130, title: 'Voice Match', desc: 'Pairs persona temperament with ElevenLabs tuning for stable delivery.', meta: 'Persona-linked synthesis' }),
-              h(BitsCard, { key: 'c', delay: 220, title: 'Latency Guard', desc: 'Maintains responsive UX even during upstream model retries and fallback.', meta: 'Rate-limit aware flow' })
-            ])
-          ]);
-        }
-
-        window.ReactDOM.createRoot(bitsRoot).render(h(ReactBitsPanel));
-      }
-    });
+      (function animate() {
+        requestAnimationFrame(animate);
+        sphere.rotation.y += 0.003;
+        sphere.rotation.x += 0.001;
+        sphere.rotation.y += mouseX * 0.01;
+        sphere.position.y = Math.sin(Date.now() * 0.0005) * 0.15;
+        renderer.render(scene, camera);
+      })();
+    })();
   </script>
 </body>
 </html>
-
-

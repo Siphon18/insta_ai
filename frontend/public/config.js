@@ -12,9 +12,7 @@ window.APP_CONFIG = window.APP_CONFIG || {
   } catch (_) {}
 
   var configured = String(window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL || '').trim();
-  var saved = '';
-  try { saved = String(localStorage.getItem('api_base_url') || '').trim(); } catch (_) {}
-  var raw = queryBase || configured || saved || '';
+  var raw = queryBase || configured || '';
 
   var normalized = raw.replace(/\/+$/, '');
   if (normalized) {

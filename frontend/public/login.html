@@ -1,442 +1,340 @@
-﻿<!DOCTYPE html>
-<html class="dark" lang="en">
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Persona &mdash; Login / Sign Up</title>
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <title>AI Persona — Login / Sign Up</title>
   <script src="/config.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
   <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Space Grotesk', sans-serif; min-height: 100vh; overflow-x: hidden; }
-
-    .bg-animate {
-      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 25%, #0f172a 50%, #1a0a2e 75%, #0f172a 100%);
-      background-size: 400% 400%;
-      animation: gradient-shift 15s ease infinite;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #ff8aa5; --secondary: #cb80fe;
+      --ig-pink: #e1306c; --ig-purple: #833ab4; --ig-red: #fd1d1d; --ig-orange: #fcb045;
+      --bg: #0e0e0e; --surface: #1a1919; --surface-high: #201f1f; --surface-highest: #262626;
+      --on-surface: #ffffff; --on-surface-var: #adaaaa; --outline-var: #494847;
     }
-    @keyframes gradient-shift {
-      0%   { background-position: 0% 50%; }
-      50%  { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-
-    .orb {
-      position: absolute; border-radius: 50%; filter: blur(100px); opacity: .35; pointer-events: none;
-      animation: float 8s ease-in-out infinite;
-    }
-    .orb-1 { width: 400px; height: 400px; top: -10%; left: -5%; background: #833ab4; animation-delay: 0s; }
-    .orb-2 { width: 350px; height: 350px; bottom: -8%; right: -5%; background: #fd1d1d; animation-delay: -3s; }
-    .orb-3 { width: 280px; height: 280px; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #fcb045; animation-delay: -6s; }
-    @keyframes float {
-      0%, 100% { transform: translateY(0) scale(1); }
-      50%      { transform: translateY(-30px) scale(1.05); }
+    body {
+      font-family: 'Manrope', sans-serif; background: var(--bg); color: var(--on-surface);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; position: relative;
     }
 
-    .glass {
-      background: rgba(255,255,255,.05);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,.1);
+    /* BG */
+    .bg-canvas {
+      position: fixed; inset: 0; z-index: 0;
+      background: radial-gradient(ellipse at 15% 15%, rgba(131,58,180,.18) 0%, transparent 55%),
+                  radial-gradient(ellipse at 85% 85%, rgba(253,29,29,.12) 0%, transparent 55%),
+                  radial-gradient(ellipse at 50% 100%, rgba(252,176,69,.08) 0%, transparent 50%),
+                  var(--bg);
     }
+    .dot-grid { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(circle, rgba(73,72,71,.35) 1px, transparent 1px); background-size: 30px 30px; }
+    .orb { position: fixed; border-radius: 50%; filter: blur(90px); pointer-events: none; z-index: 0; }
+    .orb-1 { width: 450px; height: 450px; background: rgba(131,58,180,.2); top: -120px; left: -120px; animation: f1 14s ease-in-out infinite; }
+    .orb-2 { width: 380px; height: 380px; background: rgba(253,29,29,.14); bottom: -100px; right: -100px; animation: f2 16s ease-in-out infinite; }
+    .orb-3 { width: 300px; height: 300px; background: rgba(252,176,69,.08); top: 45%; left: 50%; transform: translate(-50%,-50%); animation: f3 18s ease-in-out infinite; }
+    @keyframes f1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(25px,-35px)} }
+    @keyframes f2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-25px,35px)} }
+    @keyframes f3 { 0%,100%{transform:translate(-50%,-50%) scale(1)} 50%{transform:translate(-50%,-50%) scale(1.08)} }
 
-    @keyframes card-enter {
-      0%   { opacity: 0; transform: translateY(40px) scale(.96); }
-      100% { opacity: 1; transform: translateY(0) scale(1); }
+    /* Card */
+    .auth-card {
+      position: relative; z-index: 1; width: 100%; max-width: 440px; margin: 24px;
+      background: rgba(255,255,255,.05); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,.10); border-radius: 24px; padding: 40px 36px;
+      box-shadow: 0 40px 100px -20px rgba(0,0,0,.6);
+      animation: card-in .8s cubic-bezier(.22,1,.36,1) forwards;
     }
-    .card-enter { animation: card-enter .8s cubic-bezier(.22,1,.36,1) forwards; }
+    @keyframes card-in { from{opacity:0;transform:translateY(32px) scale(.97)} to{opacity:1;transform:none} }
 
-    .btn-shimmer {
-      background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045, #833ab4);
-      background-size: 300% 300%;
-      animation: shimmer 4s ease infinite;
-    }
-    @keyframes shimmer {
-      0%   { background-position: 0% 50%; }
-      50%  { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-
-    .gradient-text {
-      background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .insta-ring {
+    /* Logo */
+    .card-logo { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 28px; }
+    .insta-ring-lg {
+      width: 76px; height: 76px; border-radius: 50%; padding: 3px;
       background: conic-gradient(from 0deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75);
-      padding: 3px; border-radius: 50%;
-      animation: ring-rotate 6s linear infinite;
+      animation: ring-rot 6s linear infinite;
     }
-    @keyframes ring-rotate {
-      0%   { filter: hue-rotate(0deg); }
-      100% { filter: hue-rotate(360deg); }
+    @keyframes ring-rot { to { filter: hue-rotate(360deg); } }
+    .insta-ring-lg .ring-core {
+      width: 100%; height: 100%; border-radius: 50%; background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
     }
+    .card-title { font-family: 'Space Grotesk', sans-serif; font-weight: 800; font-size: 24px; text-align: center; }
+    .grad-text { background: linear-gradient(135deg, var(--ig-purple), var(--ig-red), var(--ig-orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .card-sub { font-size: 13px; color: var(--on-surface-var); text-align: center; margin-top: 4px; }
 
-    .input-glow:focus-within {
-      box-shadow: 0 0 0 2px rgba(225,48,108,.35), 0 0 20px -4px rgba(131,58,180,.2);
+    /* Tabs */
+    .tabs { display: flex; background: var(--surface); border-radius: 12px; padding: 4px; gap: 4px; margin-bottom: 28px; }
+    .tab-btn {
+      flex: 1; padding: 9px; border-radius: 9px; border: none; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px;
+      background: transparent; color: var(--on-surface-var); transition: all .25s;
     }
+    .tab-btn.active { background: var(--surface-highest); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 
-    /* tabs */
-    .tab-btn { transition: all .3s ease; position: relative; }
-    .tab-btn.active { color: #e1306c; }
-    .tab-btn.active::after {
-      content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
-      height: 2px; border-radius: 2px;
-      background: linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045);
+    /* Panels */
+    .panel { display: none; flex-direction: column; gap: 14px; }
+    .panel.active { display: flex; animation: panel-in .35s ease; }
+    @keyframes panel-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+    /* Inputs */
+    .input-wrap { position: relative; }
+    .input-wrap .material-symbols-outlined { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 18px; color: var(--on-surface-var); pointer-events: none; }
+    .input-wrap input {
+      width: 100%; padding: 13px 14px 13px 44px;
+      background: rgba(38,38,38,.6); border: none; border-bottom: 2px solid var(--outline-var);
+      border-radius: 12px 12px 0 0; color: var(--on-surface);
+      font-family: 'Manrope', sans-serif; font-size: 14px; outline: none; transition: border-color .2s;
     }
+    .input-wrap input:focus { border-bottom-color: var(--ig-pink); }
+    .input-wrap input::placeholder { color: var(--on-surface-var); }
 
-    /* form slide */
-    .form-panel { transition: opacity .4s ease, transform .4s ease; }
-    .form-panel.hidden-panel { opacity: 0; transform: translateY(12px); pointer-events: none; position: absolute; }
-    .form-panel.active-panel { opacity: 1; transform: translateY(0); pointer-events: auto; position: relative; }
+    /* Buttons */
+    .btn-shimmer {
+      width: 100%; padding: 14px; border-radius: 9999px; border: none; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; color: #fff;
+      background-size: 200% auto;
+      background-image: linear-gradient(90deg, var(--ig-purple), var(--ig-red), var(--ig-orange), var(--ig-red), var(--ig-purple));
+      animation: shimmer 4s linear infinite; transition: transform .2s, box-shadow .2s;
+      margin-top: 4px;
+    }
+    @keyframes shimmer { to { background-position: 200% center; } }
+    .btn-shimmer:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 0 30px rgba(225,48,108,.3); }
+    .btn-shimmer:disabled { opacity: .6; cursor: not-allowed; }
 
-    /* spinner */
-    @keyframes spin-slow { to { transform: rotate(360deg); } }
-    .spinner { animation: spin-slow .8s linear infinite; }
+    /* Divider */
+    .divider { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
+    .divider-line { flex: 1; height: 1px; background: rgba(255,255,255,.08); }
+    .divider-text { font-size: 12px; color: var(--on-surface-var); white-space: nowrap; }
+
+    /* Google */
+    #google-btn-wrap { display: flex; justify-content: center; min-height: 44px; }
+    #google-hint { text-align: center; font-size: 12px; color: var(--on-surface-var); }
+    #google-disabled-msg { text-align: center; font-size: 12px; color: var(--on-surface-var); padding: 10px; background: var(--surface); border-radius: 10px; }
+
+    /* Loading */
+    .spinner { width: 22px; height: 22px; border: 2px solid rgba(255,255,255,.2); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Message */
+    .auth-message { border-radius: 12px; padding: 12px 14px; font-size: 13px; display: flex; align-items: flex-start; gap: 8px; }
+    .auth-message.error { background: rgba(255,110,132,.1); border: 1px solid rgba(255,110,132,.2); color: #ff8aa5; }
+    .auth-message.success { background: rgba(74,222,128,.1); border: 1px solid rgba(74,222,128,.2); color: #4ade80; }
+    .hidden { display: none !important; }
+
+    /* Footer */
+    .card-footer { text-align: center; font-size: 11px; color: var(--on-surface-var); margin-top: 24px; opacity: .6; }
   </style>
 </head>
-
-<body class="bg-animate text-slate-200 min-h-screen flex flex-col items-center justify-center relative">
-  <!-- Orbs -->
+<body>
+  <div class="bg-canvas"></div>
+  <div class="dot-grid"></div>
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>
   <div class="orb orb-3"></div>
 
-  <!-- Main Card -->
-  <div class="relative z-10 w-full max-w-md mx-auto px-4 sm:px-0">
-    <div class="glass rounded-3xl p-8 sm:p-10 card-enter shadow-2xl shadow-purple-500/10">
-      <!-- Logo -->
-      <div class="flex justify-center mb-6">
-        <div class="insta-ring">
-          <div class="w-20 h-20 rounded-full bg-slate-900 flex items-center justify-center">
-            <span class="material-symbols-outlined text-4xl gradient-text" style="-webkit-text-fill-color:unset; background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">
-              smart_toy
-            </span>
-          </div>
+  <div class="auth-card">
+    <div class="card-logo">
+      <div class="insta-ring-lg">
+        <div class="ring-core">
+          <span class="material-symbols-outlined" style="font-size:32px;background:linear-gradient(135deg,var(--ig-purple),var(--ig-red),var(--ig-orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">smart_toy</span>
         </div>
       </div>
-
-      <h1 class="text-2xl sm:text-3xl font-bold text-center text-white mb-1">
-        Launch Your <span class="gradient-text">AI Persona</span>
-      </h1>
-      <p class="text-center text-slate-400 mb-6 text-sm">Create realistic IG-style voice personas in minutes.</p>
-
-      <!-- Tabs -->
-      <div class="flex justify-center gap-8 mb-6 border-b border-white/10 pb-3">
-        <button id="tab-login" class="tab-btn active text-sm font-semibold text-white pb-1" onclick="switchTab('login')">Log In</button>
-        <button id="tab-signup" class="tab-btn text-sm font-semibold text-slate-400 pb-1" onclick="switchTab('signup')">Sign Up</button>
-      </div>
-
-      <!-- Login Form -->
-      <div id="panel-login" class="form-panel active-panel">
-        <form id="login-form" class="space-y-4" onsubmit="return false;">
-          <div class="relative input-glow rounded-xl transition-all duration-300">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <span class="material-symbols-outlined text-gray-500 text-lg">mail</span>
-            </div>
-            <input id="login-email" type="email" required autocomplete="email"
-              class="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:ring-0 focus:border-pink-500/50 outline-none transition-all duration-300"
-              placeholder="Email address" />
-          </div>
-          <div class="relative input-glow rounded-xl transition-all duration-300">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <span class="material-symbols-outlined text-gray-500 text-lg">lock</span>
-            </div>
-            <input id="login-password" type="password" required autocomplete="current-password" minlength="6"
-              class="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:ring-0 focus:border-pink-500/50 outline-none transition-all duration-300"
-              placeholder="Password" />
-          </div>
-          <button type="submit" id="login-btn"
-            class="w-full btn-shimmer text-white font-bold text-base py-3.5 px-6 rounded-xl shadow-lg shadow-pink-500/20 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-pink-500/30 active:scale-[.98] flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined text-xl">login</span>
-            Log In
-          </button>
-        </form>
-      </div>
-
-      <!-- Sign Up Form -->
-      <div id="panel-signup" class="form-panel hidden-panel">
-        <form id="signup-form" class="space-y-4" onsubmit="return false;">
-          <div class="relative input-glow rounded-xl transition-all duration-300">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <span class="material-symbols-outlined text-gray-500 text-lg">mail</span>
-            </div>
-            <input id="signup-email" type="email" required autocomplete="email"
-              class="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:ring-0 focus:border-pink-500/50 outline-none transition-all duration-300"
-              placeholder="Email address" />
-          </div>
-          <div class="relative input-glow rounded-xl transition-all duration-300">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <span class="material-symbols-outlined text-gray-500 text-lg">lock</span>
-            </div>
-            <input id="signup-password" type="password" required autocomplete="new-password" minlength="6"
-              class="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:ring-0 focus:border-pink-500/50 outline-none transition-all duration-300"
-              placeholder="Password (min 6 chars)" />
-          </div>
-          <div class="relative input-glow rounded-xl transition-all duration-300">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <span class="material-symbols-outlined text-gray-500 text-lg">lock</span>
-            </div>
-            <input id="signup-confirm" type="password" required autocomplete="new-password" minlength="6"
-              class="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:ring-0 focus:border-pink-500/50 outline-none transition-all duration-300"
-              placeholder="Confirm password" />
-          </div>
-          <button type="submit" id="signup-btn"
-            class="w-full btn-shimmer text-white font-bold text-base py-3.5 px-6 rounded-xl shadow-lg shadow-pink-500/20 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-pink-500/30 active:scale-[.98] flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined text-xl">person_add</span>
-            Create Account
-          </button>
-        </form>
-      </div>
-
-      <div id="google-auth-section" class="mt-5">
-        <div class="flex items-center gap-3 text-xs text-slate-400">
-          <div class="h-px flex-1 bg-white/10"></div>
-          <span>or continue with</span>
-          <div class="h-px flex-1 bg-white/10"></div>
-        </div>
-        <div id="google-btn-wrap" class="mt-4 flex justify-center">
-          <button id="google-fallback-btn" type="button" disabled
-            class="h-10 px-5 rounded-full border border-white/20 text-sm text-slate-300 bg-white/5 cursor-not-allowed">
-            Google Sign-In Unavailable
-          </button>
-        </div>
-        <p id="google-auth-hint" class="hidden mt-3 text-center text-xs text-amber-300/90"></p>
-      </div>
-
-      <!-- Error / Success Message -->
-      <div id="auth-message" class="hidden mt-4 p-3 rounded-xl text-sm flex items-start gap-2"></div>
-
-      <!-- Loading -->
-      <div id="auth-loading" class="hidden mt-4 flex justify-center">
-        <div class="w-8 h-8 rounded-full border-[3px] border-pink-500/20 border-t-pink-500 spinner"></div>
+      <div>
+        <div class="card-title">Launch Your <span class="grad-text">AI Persona</span></div>
+        <div class="card-sub">Create realistic IG-style voice personas in minutes.</div>
       </div>
     </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-login" onclick="switchTab('login')">Log In</button>
+      <button class="tab-btn" id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+    </div>
+
+    <!-- Login Panel -->
+    <div class="panel active" id="panel-login">
+      <form id="login-form">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="input-wrap">
+            <span class="material-symbols-outlined">mail</span>
+            <input type="email" id="login-email" placeholder="Email address" autocomplete="email" required />
+          </div>
+          <div class="input-wrap">
+            <span class="material-symbols-outlined">lock</span>
+            <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required />
+          </div>
+          <button type="submit" class="btn-shimmer" id="login-btn">Log In</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Signup Panel -->
+    <div class="panel" id="panel-signup">
+      <form id="signup-form">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="input-wrap">
+            <span class="material-symbols-outlined">mail</span>
+            <input type="email" id="signup-email" placeholder="Email address" autocomplete="email" required />
+          </div>
+          <div class="input-wrap">
+            <span class="material-symbols-outlined">lock</span>
+            <input type="password" id="signup-password" placeholder="Password (min. 6 chars)" autocomplete="new-password" required />
+          </div>
+          <div class="input-wrap">
+            <span class="material-symbols-outlined">lock_reset</span>
+            <input type="password" id="signup-confirm" placeholder="Confirm password" autocomplete="new-password" required />
+          </div>
+          <button type="submit" class="btn-shimmer" id="signup-btn">Create Account</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Feedback -->
+    <div id="auth-loading" class="hidden" style="margin-top:14px;"><div class="spinner"></div></div>
+    <div id="auth-message" class="hidden" style="margin-top:14px;"></div>
+
+    <!-- Google -->
+    <div id="google-auth-section" style="margin-top:16px;">
+      <div class="divider"><div class="divider-line"></div><div class="divider-text">or continue with</div><div class="divider-line"></div></div>
+      <div id="google-btn-wrap" style="margin-top:12px;"></div>
+      <div id="google-hint" class="hidden"></div>
+      <div id="google-disabled-msg" class="hidden">Google sign-in not configured.</div>
+    </div>
+
+    <div class="card-footer">© 2025 AI Persona. Powered by Groq & ElevenLabs</div>
   </div>
 
-  <!-- Footer -->
-  <p class="relative z-10 text-xs text-slate-600 mt-6">&copy; 2025 AI Persona. Powered by Groq &amp; ElevenLabs</p>
-
   <script>
-    let googleAuthEnabled = false;
-    let googleClientId = null;
-    let googleButtonRendered = false;
-
     function apiUrl(path) {
       const base = (window.__API_BASE_URL__ || '').trim();
-      if (!base || /^https?:\/\//i.test(path)) return path;
-      return `${base}${path}`;
+      return base ? `${base}${path}` : path;
     }
 
-    function setGoogleHint(message) {
-      const hint = document.getElementById('google-auth-hint');
-      if (!hint) return;
-      if (!message) {
-        hint.classList.add('hidden');
-        hint.textContent = '';
-        return;
-      }
-      hint.textContent = message;
-      hint.classList.remove('hidden');
-    }
-
-    // If already logged in, verify token then redirect
-    (async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const r = await fetch(apiUrl('/api/auth/me'), { headers: { 'Authorization': 'Bearer ' + token } });
-          if (r.ok) { window.location.href = '/add-username.html'; return; }
-        } catch (e) {}
-        localStorage.removeItem('token');
-        localStorage.removeItem('personaData');
-      }
-    })();
+    let googleAuthEnabled = false, googleClientId = null, googleButtonRendered = false;
 
     async function loadGoogleAuthConfig() {
       try {
-        const res = await fetch(apiUrl('/api/auth/google/config'));
-        if (!res.ok) {
-          setGoogleHint('Google sign-in is unavailable right now.');
-          return;
-        }
-        const data = await res.json();
-        googleAuthEnabled = Boolean(data.enabled && data.clientId);
-        googleClientId = googleAuthEnabled ? data.clientId : null;
-        if (!googleAuthEnabled) setGoogleHint('Google sign-in is disabled on backend. Add GOOGLE_CLIENT_ID.');
-        else setGoogleHint('');
-      } catch (_) {
-        setGoogleHint('Google sign-in requires backend API access. Set API_BASE_URL in /config.js.');
-      }
+        const res = await fetch(apiUrl('/api/auth/google-config'));
+        if (!res.ok) { disableGoogle(); return; }
+        const cfg = await res.json();
+        if (cfg.enabled && cfg.clientId) {
+          googleAuthEnabled = true;
+          googleClientId = cfg.clientId;
+          document.getElementById('google-disabled-msg').classList.add('hidden');
+        } else { disableGoogle(); }
+      } catch (_) { disableGoogle(); }
+    }
+
+    function disableGoogle() {
+      document.getElementById('google-disabled-msg').classList.remove('hidden');
+      setGoogleHint('');
+    }
+
+    function setGoogleHint(msg) {
+      const el = document.getElementById('google-hint');
+      if (!msg) { el.classList.add('hidden'); el.textContent = ''; return; }
+      el.classList.remove('hidden'); el.textContent = msg;
     }
 
     async function handleGoogleCredential(response) {
-      const credential = String(response?.credential || '').trim();
-      if (!credential) {
-        showMessage('Google sign-in failed. Please retry.');
-        return;
-      }
       setLoading(true);
-      document.getElementById('auth-message').classList.add('hidden');
       try {
         const res = await fetch(apiUrl('/api/auth/google'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: response.credential })
         });
         const data = await res.json();
-        if (!res.ok) {
-          showMessage(data.error || 'Google sign-in failed.');
-          return;
-        }
+        if (!res.ok) { showMessage(data.error || 'Google sign-in failed.'); return; }
         localStorage.setItem('token', data.token);
         localStorage.setItem('userEmail', data.user.email);
         showMessage('Google sign-in successful! Redirecting...', false);
         setTimeout(() => { window.location.href = '/add-username.html'; }, 600);
-      } catch (_) {
-        showMessage('Network error. Please try again.');
-      } finally {
-        setLoading(false);
-      }
+      } catch (_) { showMessage('Network error. Please try again.'); }
+      finally { setLoading(false); }
     }
 
     function maybeRenderGoogleButton() {
       if (!googleAuthEnabled || googleButtonRendered) return;
       if (!(window.google && window.google.accounts && window.google.accounts.id)) return;
-
-      const section = document.getElementById('google-auth-section');
       const wrap = document.getElementById('google-btn-wrap');
-      if (!section || !wrap) return;
-
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: handleGoogleCredential,
-        auto_select: false,
-        cancel_on_tap_outside: true
-      });
-
+      if (!wrap) return;
+      window.google.accounts.id.initialize({ client_id: googleClientId, callback: handleGoogleCredential, auto_select: false, cancel_on_tap_outside: true });
       wrap.innerHTML = '';
-      window.google.accounts.id.renderButton(wrap, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'continue_with',
-        shape: 'pill'
-      });
+      window.google.accounts.id.renderButton(wrap, { type: 'standard', theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill' });
       googleButtonRendered = true;
     }
 
     function switchTab(tab) {
-      const loginTab = document.getElementById('tab-login');
-      const signupTab = document.getElementById('tab-signup');
-      const loginPanel = document.getElementById('panel-login');
-      const signupPanel = document.getElementById('panel-signup');
-      const msgEl = document.getElementById('auth-message');
-      msgEl.classList.add('hidden');
-
-      if (tab === 'login') {
-        loginTab.classList.add('active'); loginTab.classList.remove('text-slate-400'); loginTab.classList.add('text-white');
-        signupTab.classList.remove('active'); signupTab.classList.add('text-slate-400'); signupTab.classList.remove('text-white');
-        loginPanel.classList.remove('hidden-panel'); loginPanel.classList.add('active-panel');
-        signupPanel.classList.add('hidden-panel'); signupPanel.classList.remove('active-panel');
-      } else {
-        signupTab.classList.add('active'); signupTab.classList.remove('text-slate-400'); signupTab.classList.add('text-white');
-        loginTab.classList.remove('active'); loginTab.classList.add('text-slate-400'); loginTab.classList.remove('text-white');
-        signupPanel.classList.remove('hidden-panel'); signupPanel.classList.add('active-panel');
-        loginPanel.classList.add('hidden-panel'); loginPanel.classList.remove('active-panel');
-      }
+      const isLogin = tab === 'login';
+      document.getElementById('tab-login').classList.toggle('active', isLogin);
+      document.getElementById('tab-signup').classList.toggle('active', !isLogin);
+      document.getElementById('panel-login').classList.toggle('active', isLogin);
+      document.getElementById('panel-signup').classList.toggle('active', !isLogin);
+      document.getElementById('auth-message').classList.add('hidden');
     }
 
     function showMessage(text, isError = true) {
       const el = document.getElementById('auth-message');
-      el.classList.remove('hidden');
-      el.className = `mt-4 p-3 rounded-xl text-sm flex items-start gap-2 ${isError ? 'bg-red-500/10 border border-red-500/20 text-red-300' : 'bg-green-500/10 border border-green-500/20 text-green-300'}`;
-      el.innerHTML = `<span class="material-symbols-outlined shrink-0 text-base">${isError ? 'error' : 'check_circle'}</span><span>${text}</span>`;
+      el.classList.remove('hidden', 'error', 'success');
+      el.className = `auth-message ${isError ? 'error' : 'success'}`;
+      el.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;flex-shrink:0">${isError ? 'error' : 'check_circle'}</span><span>${text}</span>`;
     }
 
     function setLoading(isLoading) {
       document.getElementById('auth-loading').classList.toggle('hidden', !isLoading);
-      document.getElementById('login-btn').disabled = isLoading;
-      document.getElementById('signup-btn').disabled = isLoading;
-      if (isLoading) {
-        document.getElementById('login-btn').style.opacity = '0.6';
-        document.getElementById('signup-btn').style.opacity = '0.6';
-      } else {
-        document.getElementById('login-btn').style.opacity = '1';
-        document.getElementById('signup-btn').style.opacity = '1';
-      }
+      ['login-btn', 'signup-btn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) { btn.disabled = isLoading; btn.style.opacity = isLoading ? '0.6' : '1'; }
+      });
     }
 
-    // Login
-    document.getElementById('login-form').addEventListener('submit', async () => {
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
       if (!email || !password) return showMessage('Please fill in all fields.');
-
       setLoading(true);
       document.getElementById('auth-message').classList.add('hidden');
       try {
-        const res = await fetch(apiUrl('/api/auth/login'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
+        const res = await fetch(apiUrl('/api/auth/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
         const data = await res.json();
         if (!res.ok) { showMessage(data.error || 'Login failed.'); return; }
-
         localStorage.setItem('token', data.token);
         localStorage.setItem('userEmail', data.user.email);
         showMessage('Login successful! Redirecting...', false);
         setTimeout(() => { window.location.href = '/add-username.html'; }, 600);
-      } catch (err) {
-        showMessage('Network error. Please try again.');
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { showMessage('Network error. Please try again.'); }
+      finally { setLoading(false); }
     });
 
-    // Signup
-    document.getElementById('signup-form').addEventListener('submit', async () => {
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       const email = document.getElementById('signup-email').value.trim();
       const password = document.getElementById('signup-password').value;
       const confirm = document.getElementById('signup-confirm').value;
-
       if (!email || !password || !confirm) return showMessage('Please fill in all fields.');
       if (password.length < 6) return showMessage('Password must be at least 6 characters.');
       if (password !== confirm) return showMessage('Passwords do not match.');
-
       setLoading(true);
       document.getElementById('auth-message').classList.add('hidden');
       try {
-        const res = await fetch(apiUrl('/api/auth/signup'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
+        const res = await fetch(apiUrl('/api/auth/signup'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
         const data = await res.json();
         if (!res.ok) { showMessage(data.error || 'Signup failed.'); return; }
-
         localStorage.setItem('token', data.token);
         localStorage.setItem('userEmail', data.user.email);
         showMessage('Account created! Redirecting...', false);
         setTimeout(() => { window.location.href = '/add-username.html'; }, 600);
-      } catch (err) {
-        showMessage('Network error. Please try again.');
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { showMessage('Network error. Please try again.'); }
+      finally { setLoading(false); }
     });
 
     (async () => {
-      setGoogleHint('Checking Google sign-in availability...');
+      setGoogleHint('Checking Google sign-in...');
       await loadGoogleAuthConfig();
       if (!googleAuthEnabled) return;
       for (let i = 0; i < 20; i++) {
@@ -444,10 +342,8 @@
         if (googleButtonRendered) return;
         await new Promise(r => setTimeout(r, 150));
       }
-      if (!googleButtonRendered) setGoogleHint('Google script did not load. Check browser blockers and origin settings.');
+      if (!googleButtonRendered) setGoogleHint('Google sign-in unavailable. Check your browser blockers.');
     })();
   </script>
 </body>
 </html>
-
-
