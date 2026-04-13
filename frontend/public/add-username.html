@@ -192,22 +192,7 @@
       </div>
     </header>
 
-    <!-- Settings modal (ElevenLabs API key) -->
-    <div id="elevenlabs-modal" class="hidden fixed inset-0 z-60 flex items-center justify-center bg-black/60">
-      <div class="bg-white/3 text-slate-200 rounded-xl p-6 w-full max-w-lg glass border border-white/10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold">ElevenLabs API Key</h3>
-          <button id="elevenlabs-modal-close" class="text-gray-400 hover:text-white">✕</button>
-        </div>
-        <p class="text-sm text-gray-400 mb-3">Paste your ElevenLabs API key to enable browser TTS. The key is stored only in your browser's localStorage.</p>
-        <label class="text-xs text-gray-400">API Key</label>
-        <input id="elevenlabs-key-input" type="password" class="w-full mt-2 mb-4 p-3 rounded-lg bg-white/5 border border-white/10 text-sm" placeholder="sk-..." />
-        <div class="flex justify-end gap-3">
-          <button id="elevenlabs-modal-save" class="px-4 py-2 bg-primary text-white rounded-lg">Save</button>
-          <button id="elevenlabs-modal-cancel" class="px-4 py-2 bg-white/5 text-white rounded-lg">Cancel</button>
-        </div>
-      </div>
-    </div>
+    
 
     <!-- main -->
     <main class="flex-grow flex items-center justify-center py-12 px-4">
@@ -766,4 +751,21 @@
   </script>
 </body>
 </html>
+
+<!-- ElevenLabs API Key modal (moved to end to avoid stacking-context issues) -->
+<div id="elevenlabs-modal" class="hidden fixed inset-0 z-[99999] flex items-center justify-center bg-black/60" style="position:fixed;">
+  <div class="bg-white/3 text-slate-200 rounded-xl p-6 w-full max-w-lg glass border border-white/10">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold">ElevenLabs API Key</h3>
+      <button id="elevenlabs-modal-close" class="text-gray-400 hover:text-white">✕</button>
+    </div>
+    <p class="text-sm text-gray-400 mb-3">Paste your ElevenLabs API key to enable browser TTS. The key is stored only in your browser's localStorage.</p>
+    <label class="text-xs text-gray-400">API Key</label>
+    <input id="elevenlabs-key-input" type="password" class="w-full mt-2 mb-4 p-3 rounded-lg bg-white/5 border border-white/10 text-sm" placeholder="sk-..." />
+    <div class="flex justify-end gap-3">
+      <button id="elevenlabs-modal-save" class="px-4 py-2 bg-primary text-white rounded-lg">Save</button>
+      <button id="elevenlabs-modal-cancel" class="px-4 py-2 bg-white/5 text-white rounded-lg">Cancel</button>
+    </div>
+  </div>
+</div>
 
