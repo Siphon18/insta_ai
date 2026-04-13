@@ -179,6 +179,10 @@
             <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors duration-300" href="/">Home</a>
             <a class="text-sm font-medium text-gray-400 hover:text-primary transition-colors duration-300" href="/">About</a>
           </nav>
+          <button id="settings-btn" type="button" title="Settings"
+            class="text-xs sm:text-sm text-gray-300 border border-white/15 bg-white/5 hover:bg-white/10 hover:text-white px-3 py-1.5 rounded-lg transition-all duration-300 inline-flex items-center gap-1.5 mr-2">
+            <span class="material-symbols-outlined" style="font-size:16px">settings</span>
+          </button>
           <button id="logout-btn" type="button"
             class="text-xs sm:text-sm text-gray-300 border border-white/15 bg-white/5 hover:bg-white/10 hover:text-white px-3 py-1.5 rounded-lg transition-all duration-300 inline-flex items-center gap-1.5">
             <span class="material-symbols-outlined" style="font-size:16px">logout</span>
@@ -187,6 +191,23 @@
         </div>
       </div>
     </header>
+
+    <!-- Settings modal (ElevenLabs API key) -->
+    <div id="elevenlabs-modal" class="hidden fixed inset-0 z-60 flex items-center justify-center bg-black/60">
+      <div class="bg-white/3 text-slate-200 rounded-xl p-6 w-full max-w-lg glass border border-white/10">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">ElevenLabs API Key</h3>
+          <button id="elevenlabs-modal-close" class="text-gray-400 hover:text-white">✕</button>
+        </div>
+        <p class="text-sm text-gray-400 mb-3">Paste your ElevenLabs API key to enable browser TTS. The key is stored only in your browser's localStorage.</p>
+        <label class="text-xs text-gray-400">API Key</label>
+        <input id="elevenlabs-key-input" type="password" class="w-full mt-2 mb-4 p-3 rounded-lg bg-white/5 border border-white/10 text-sm" placeholder="sk-..." />
+        <div class="flex justify-end gap-3">
+          <button id="elevenlabs-modal-save" class="px-4 py-2 bg-primary text-white rounded-lg">Save</button>
+          <button id="elevenlabs-modal-cancel" class="px-4 py-2 bg-white/5 text-white rounded-lg">Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <!-- main -->
     <main class="flex-grow flex items-center justify-center py-12 px-4">
@@ -390,6 +411,34 @@
       const personaToggleIcon = document.getElementById('persona-toggle-icon');
       const personaToggleLabel = document.getElementById('persona-toggle-label');
       const logoutBtn = document.getElementById('logout-btn');
+      const settingsBtn = document.getElementById('settings-btn');
+      // Modal handlers for ElevenLabs API key
+      function openElevenLabsModal() {
+        const modal = document.getElementById('elevenlabs-modal');
+        const input = document.getElementById('elevenlabs-key-input');
+        if (!modal) return;
+        input.value = localStorage.getItem('ELEVEN_API_KEY') || '';
+        modal.classList.remove('hidden');
+      }
+      function closeElevenLabsModal() {
+        const modal = document.getElementById('elevenlabs-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+      }
+      const modalClose = document.getElementById('elevenlabs-modal-close');
+      const modalCancel = document.getElementById('elevenlabs-modal-cancel');
+      const modalSave = document.getElementById('elevenlabs-modal-save');
+      settingsBtn?.addEventListener('click', () => openElevenLabsModal());
+      modalClose?.addEventListener('click', () => closeElevenLabsModal());
+      modalCancel?.addEventListener('click', () => closeElevenLabsModal());
+      modalSave?.addEventListener('click', () => {
+        const input = document.getElementById('elevenlabs-key-input');
+        if (!input) return;
+        const key = String(input.value || '').trim();
+        if (!key) { alert('API key cannot be empty'); return; }
+        localStorage.setItem('ELEVEN_API_KEY', key);
+        closeElevenLabsModal();
+      });
       const adminUsageCard = document.getElementById('admin-usage-card');
       const refreshAdminUsageBtn = document.getElementById('refresh-admin-usage');
       const COMPACT_PERSONA_THRESHOLD = 6;
