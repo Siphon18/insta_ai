@@ -1607,6 +1607,53 @@ app.post('/api/tts-token', authenticateToken, async (req, res) => {
   }
 });
 
+// ---------------- Temporary debug endpoint: server-side ElevenLabs TTS ----------------
+// Use this to test whether the deployed host can reach ElevenLabs and generate audio.
+// Returns a cached audio URL on success or detailed error info on failure.
+app.post('/api/debug-tts', authenticateToken, async (req, res) => {
+  try {
+    const { text, voiceId, modelId, voiceSettings } = req.body || {};
+    if (!text) return res.status(400).json({ error: 'Missing `text` in request body' });
+    const vId = String(voiceId || (process.env.ELEVENLABS_DEFAULT_VOICE_ID || ELEVENLABS_DEFAULT_VOICE_ID));
+
+    // Call ElevenLabs REST API directly from the server
+    const elevenUrl = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(vId)}`;
+    const payload = {
+      text: text,
+      model_id: modelId || ELEVENLABS_MODEL_ID,
+      voice_settings: voiceSettings || {}
+    };
+
+    const resp = await axios.post(elevenUrl, payload, {
+      headers: {
+        'xi-api-key': process.env.ELEVENLABS_API_KEY,
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json'
+      },
+      responseType: 'arraybuffer',
+      timeout: 45000
+    });
+
+    const contentType = resp.headers['content-type'] || 'audio/mpeg';
+    const buffer = Buffer.from(resp.data);
+    const audioUrl = cacheGeneratedAudio(buffer, contentType);
+    console.log('[api/debug-tts] generated audio cached at', audioUrl);
+    return res.status(200).json({ ok: true, audioUrl });
+  } catch (err) {
+    console.error('[api/debug-tts] error', err?.response?.status, err?.response?.data || err?.message || err);
+    const details = {};
+    if (err.response) {
+      try { details.body = typeof err.response.data === 'string' ? err.response.data.substring(0, 2000) : err.response.data; } catch (e) {}
+      details.status = err.response.status;
+      details.headers = err.response.headers;
+    } else {
+      details.message = err.message;
+    }
+    return res.status(502).json({ ok: false, error: 'Failed to generate server-side TTS', details });
+  }
+});
+
+
 app.get('/chat', (req, res) => {
   const chatPath = path.join(__dirname, '../frontend/public', 'Chat.html');
   if (fs.existsSync(chatPath)) return res.sendFile(chatPath);
