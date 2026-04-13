@@ -873,7 +873,18 @@ app.get('/api/image-proxy', async (req, res) => {
       return res.status(403).send('Host not allowed for proxied images');
     }
 
-    const upstream = await axios.get(finalImageUrl, { responseType: 'stream', timeout: 20000 });
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      'Accept': 'image/*,*/*;q=0.8'
+    };
+    if (isInstagramPostPage) headers['Referer'] = rawUrl;
+
+    const upstream = await axios.get(finalImageUrl, {
+      responseType: 'stream',
+      timeout: 20000,
+      headers,
+      maxRedirects: 5
+    });
 
     if (upstream.headers['content-type']) res.setHeader('Content-Type', upstream.headers['content-type']);
     if (upstream.headers['cache-control']) res.setHeader('Cache-Control', upstream.headers['cache-control']);
