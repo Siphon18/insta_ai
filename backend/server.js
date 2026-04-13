@@ -43,7 +43,7 @@ const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '')
 
 function validateStartupConfig() {
   const missing = [];
-  const required = ['DATABASE_URL', 'GROQ_API_KEY', 'RAPIDAPI_KEY', 'ELEVENLABS_API_KEY', 'JWT_SECRET'];
+  const required = ['DATABASE_URL', 'GROQ_API_KEY', 'RAPIDAPI_KEY', 'JWT_SECRET'];
   for (const key of required) {
     if (!process.env[key] || !String(process.env[key]).trim()) missing.push(key);
   }
@@ -156,7 +156,7 @@ async function groqChatCompletion({ modelName, messages, generationConfig }) {
   return extractgroqText(response.data);
 }
 
-let elevenLabsClientPromise = null;
+// elevenLabsClientPromise removed - server-side ElevenLabs client disabled (client-side TTS used)
 let googleOAuthClient = null;
 const generatedAudioCache = new Map(); // id -> { buffer, contentType, createdAt }
 const AUDIO_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -168,14 +168,6 @@ function cleanupAudioCache() {
   }
 }
 setInterval(cleanupAudioCache, 10 * 60 * 1000).unref();
-
-async function getElevenLabsClient() {
-  if (!elevenLabsClientPromise) {
-    elevenLabsClientPromise = import('@elevenlabs/elevenlabs-js')
-      .then(mod => new mod.ElevenLabsClient({ apiKey: process.env.ELEVENLABS_API_KEY }));
-  }
-  return elevenLabsClientPromise;
-}
 
 function getGoogleOAuthClient() {
   if (!googleOAuthClient) googleOAuthClient = new OAuth2Client(GOOGLE_CLIENT_ID);
@@ -1573,85 +1565,8 @@ app.post('/chat', authenticateToken, async (req, res) => {
 });
 
 
-// ---------------- Temporary TTS token for client-side ElevenLabs calls ----------------
-// Returns a short-lived signed token that the frontend can use as an authorization
-// value (xi-api-key) when calling ElevenLabs directly from the browser. The token
-// itself does NOT contain the real ElevenLabs API key; it is a server-signed JWT
-// which the deployed ElevenLabs account must be configured to accept (if supported).
-// This endpoint is intended to support short-lived, per-user TTS requests.
-app.post('/api/tts-token', authenticateToken, async (req, res) => {
-  try {
-    const { text, voiceId, modelId, voiceSettings, expiresIn = 60 } = req.body || {};
-    if (!text || !voiceId) return res.status(400).json({ error: 'Missing text or voiceId' });
-
-    // Create a short-lived JWT signed with server secret. Frontend will use this
-    // as a temporary xi-api-key when calling ElevenLabs. Note: this requires
-    // custom support on the ElevenLabs side to accept these tokens. If ElevenLabs
-    // cannot accept such tokens, an alternative approach is needed (e.g. user
-    // downloads audio locally or use a paid proxy service with allowable IPs).
-    const ttsPayload = {
-      sub: String(req.user.id),
-      uid: req.user.id,
-      voiceId: String(voiceId),
-      modelId: String(modelId || ELEVENLABS_MODEL_ID),
-      iat: Math.floor(Date.now() / 1000)
-    };
-    const ttl = Math.max(10, Math.min(parseInt(String(expiresIn), 10) || 60, 300));
-    const token = jwt.sign(ttsPayload, process.env.TTS_TOKEN_SECRET || JWT_SECRET, { expiresIn: ttl + 's' });
-
-    // Return minimal info needed by frontend to call ElevenLabs directly.
-    res.json({ ok: true, token, expiresIn: ttl });
-  } catch (err) {
-    console.error('[api/tts-token] error', err?.message || err);
-    res.status(500).json({ error: 'Failed to generate TTS token' });
-  }
-});
-
-// ---------------- Temporary debug endpoint: server-side ElevenLabs TTS ----------------
-// Use this to test whether the deployed host can reach ElevenLabs and generate audio.
-// Returns a cached audio URL on success or detailed error info on failure.
-app.post('/api/debug-tts', authenticateToken, async (req, res) => {
-  try {
-    const { text, voiceId, modelId, voiceSettings } = req.body || {};
-    if (!text) return res.status(400).json({ error: 'Missing `text` in request body' });
-    const vId = String(voiceId || (process.env.ELEVENLABS_DEFAULT_VOICE_ID || ELEVENLABS_DEFAULT_VOICE_ID));
-
-    // Call ElevenLabs REST API directly from the server
-    const elevenUrl = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(vId)}`;
-    const payload = {
-      text: text,
-      model_id: modelId || ELEVENLABS_MODEL_ID,
-      voice_settings: voiceSettings || {}
-    };
-
-    const resp = await axios.post(elevenUrl, payload, {
-      headers: {
-        'xi-api-key': process.env.ELEVENLABS_API_KEY,
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json'
-      },
-      responseType: 'arraybuffer',
-      timeout: 45000
-    });
-
-    const contentType = resp.headers['content-type'] || 'audio/mpeg';
-    const buffer = Buffer.from(resp.data);
-    const audioUrl = cacheGeneratedAudio(buffer, contentType);
-    console.log('[api/debug-tts] generated audio cached at', audioUrl);
-    return res.status(200).json({ ok: true, audioUrl });
-  } catch (err) {
-    console.error('[api/debug-tts] error', err?.response?.status, err?.response?.data || err?.message || err);
-    const details = {};
-    if (err.response) {
-      try { details.body = typeof err.response.data === 'string' ? err.response.data.substring(0, 2000) : err.response.data; } catch (e) {}
-      details.status = err.response.status;
-      details.headers = err.response.headers;
-    } else {
-      details.message = err.message;
-    }
-    return res.status(502).json({ ok: false, error: 'Failed to generate server-side TTS', details });
-  }
-});
+// Server-side TTS endpoints removed — TTS is now performed client-side via
+// browser → ElevenLabs using a user-provided API key stored in localStorage.
 
 
 app.get('/chat', (req, res) => {
