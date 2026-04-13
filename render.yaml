@@ -1,0 +1,32 @@
+# render.yaml — sample Render deploy spec for this repo
+# Adjust service names, plans, and environment variables in the Render dashboard as needed.
+# This file ensures Render uses the legacy static frontend at `frontend/public`
+# and starts the Node backend from `backend/server.js` rather than looking for
+# a removed React build at `frontend_react/dist`.
+
+services:
+  - type: web
+    name: insta-ai-backend
+    env: node
+    plan: free
+    # Install dependencies for the backend and keep the repo root untouched
+    buildCommand: cd backend && npm install
+    startCommand: node backend/server.js
+
+  - type: static
+    name: insta-ai-frontend
+    env: static
+    plan: free
+    # No build step required for the legacy static frontend. Ensure Publish
+    # Directory points to the folder containing the static files.
+    buildCommand: ""
+    publishPath: frontend/public
+
+# Notes:
+# - Do NOT store secrets in this file. Add environment variables and secrets
+#   in the Render dashboard (ENV/Secrets) for each service.
+# - If you prefer a single Web Service that serves static files, you can omit
+#   the `static` service and rely on the backend startCommand (this project
+#   already serves `../frontend/public` from the Express app).
+# - After committing this file, go to the Render dashboard and create or
+#   update services using the repo's render.yaml, then trigger a deploy.
