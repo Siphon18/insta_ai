@@ -81,6 +81,9 @@
 <body class="bg-slate-900 text-slate-200">
   <canvas id="visualizer-canvas"></canvas>
 
+  <!-- Server notice (hidden by default) -->
+  <div id="server-notice" class="hidden fixed top-6 left-1/2 -translate-x-1/2 bg-yellow-600 text-black px-4 py-2 rounded-md z-50 shadow-lg"></div>
+
   <div class="overlay p-6 sm:p-8">
     <!-- Header -->
     <header class="w-full flex justify-between items-center animate-fade-in-up" style="animation-delay:.2s;">
@@ -145,6 +148,18 @@
     })();
 
     document.addEventListener('DOMContentLoaded', () => {
+      // Small helper to surface server-side/TTs issues to the user
+      function showServerNotice(msg, timeoutMs = 8000) {
+        try {
+          const el = document.getElementById('server-notice');
+          if (!el) return;
+          el.textContent = String(msg || '');
+          el.classList.remove('hidden');
+          el.classList.add('animate-fade-in-up');
+          if (timeoutMs > 0) setTimeout(() => { el.classList.add('hidden'); }, timeoutMs);
+        } catch (e) { console.warn('[showServerNotice] failed', e); }
+      }
+
       const resolveApiAssetUrl = (url) => {
         if (!url) return url;
         if (/^https?:\/\//i.test(url)) return url;
@@ -333,6 +348,8 @@
             body: JSON.stringify({ message: transcript })
           });
           const data = await response.json();
+          // Debug: log full server response for TTS investigation
+          try { console.debug('[voice-chat] /chat response', data); } catch (e) {}
           if (!response.ok) {
             if (response.status === 429) {
               await new Promise(r => setTimeout(r, 2000));
@@ -361,6 +378,8 @@
       }
 
       async function handleServerResponse(data) {
+        // Debug: expose received response and audioUrl
+        try { console.debug('[voice-chat] handleServerResponse data:', data); } catch (e) {}
         const textResponse = String(data?.response || '').trim();
         const speakWithBrowserTTS = async (text) => {
           if (!text || !('speechSynthesis' in window)) return false;
@@ -384,7 +403,11 @@
         if (!audioUrl && Array.isArray(data.history) && data.history.length) {
           audioUrl = data.history[data.history.length - 1]?.audioUrl || null;
         }
+        // If the server returned an audioUrl, play it. Otherwise, if the server
+        // returned voice config, attempt to request a short-lived TTS token and
+        // call ElevenLabs directly from the browser.
         if (audioUrl) {
+          try { console.debug('[voice-chat] Received audioUrl:', audioUrl); } catch (e) {}
           const base = (window.__API_BASE_URL__ || '').trim();
           const resolveApiUrl = (u) => {
             if (!u) return u;
@@ -414,7 +437,21 @@
               }
             }, 300);
           }
-        } else {
+        } else if (data.voiceId) {
+          // Attempt client-side ElevenLabs: request a short-lived token then call the API
+          try {
+            showServerNotice('Generating audio via ElevenLabs in your browser...', 5000);
+            const played = await requestTtsAndPlay(textResponse, data.voiceId, data.modelId, data.voiceSettings);
+            if (played) return; // audio played — done
+            // else fall through to browser TTS fallback
+            console.warn('[voice-chat] Client-side ElevenLabs call failed; falling back to browser TTS');
+            showServerNotice('Client-side ElevenLabs failed; using browser TTS fallback.', 6000);
+          } catch (err) {
+            console.error('[voice-chat] client-side TTS error', err);
+            showServerNotice('Client-side ElevenLabs failed; using browser TTS fallback.', 6000);
+          }
+
+          // Browser TTS fallback
           updateStatusText("Speaking (fallback)...");
           const spoken = await speakWithBrowserTTS(textResponse);
           if (!spoken) {
@@ -431,6 +468,93 @@
               talkBtnIcon.textContent = 'mic';
             }
           }, 300);
+        } else {
+          // No audioUrl and no voice config — final fallback to browser TTS
+          console.warn('[voice-chat] No audioUrl or voice config in server response; using browser TTS');
+          showServerNotice('No TTS available; using browser TTS fallback.', 6000);
+          updateStatusText("Speaking (fallback)...");
+          const spoken = await speakWithBrowserTTS(textResponse);
+          if (!spoken) {
+            updateStatusText("No audio received");
+            stopListening();
+            return;
+          }
+          updateStatusText("Listening...");
+          setTimeout(async () => {
+            try { await startListening(); } catch (_) {
+              updateStatusText("Click the button to speak");
+              talkBtn.disabled = false;
+              talkBtn.classList.add('talk-btn-pulse');
+              talkBtnIcon.textContent = 'mic';
+            }
+          }, 300);
+        }
+      }
+
+      // Request a short-lived TTS token from the backend and call ElevenLabs from the browser.
+      async function requestTtsAndPlay(text, voiceId, modelId, voiceSettings) {
+        try {
+          const tokenResp = await authFetch('/api/tts-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text, voiceId: voiceId, modelId: modelId, voiceSettings: voiceSettings })
+          });
+          if (!tokenResp.ok) {
+            const err = await tokenResp.json().catch(() => ({}));
+            console.warn('[requestTtsAndPlay] /api/tts-token failed', err);
+            return false;
+          }
+          const tokenData = await tokenResp.json();
+          const ttsToken = tokenData.token;
+          if (!ttsToken) {
+            console.warn('[requestTtsAndPlay] no token in response', tokenData);
+            return false;
+          }
+
+          const elevenUrl = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`;
+          const payload = {
+            text: text,
+            model_id: modelId || window.__ELEVENLABS_MODEL_ID__ || 'eleven_multilingual_v2',
+            voice_settings: voiceSettings || {}
+          };
+
+          const resp = await fetch(elevenUrl, {
+            method: 'POST',
+            headers: {
+              'xi-api-key': ttsToken,
+              'Accept': 'audio/mpeg',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (!resp.ok) {
+            const txt = await resp.text().catch(() => '');
+            console.warn('[requestTtsAndPlay] ElevenLabs responded with', resp.status, txt.substring(0, 400));
+            // If account lacks access to the requested library voice (402), retry
+            // with a default/public voice id as a fallback to avoid blocking audio.
+            if (resp.status === 402) {
+              console.warn('[requestTtsAndPlay] received 402 paid_plan_required, retrying with default voice id');
+              const defaultVoice = 'JBFqnCBsd6RMkjVDRZzb';
+              if (defaultVoice && defaultVoice !== voiceId) {
+                try {
+                  const retryPlayed = await requestTtsAndPlay(text, defaultVoice, modelId, voiceSettings);
+                  return retryPlayed;
+                } catch (e) { console.error('[requestTtsAndPlay] retry error', e); }
+              }
+            }
+            return false;
+          }
+
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const played = await playAIResponse(url);
+          // revoke object URL after short delay
+          setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
+          return played;
+        } catch (err) {
+          console.error('[requestTtsAndPlay] error', err);
+          return false;
         }
       }
 

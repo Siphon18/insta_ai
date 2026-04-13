@@ -1,3 +1,68 @@
+# insta_ai
+
+Lightweight AI Persona app (backend + static frontend). This repo is prepared for GitHub.
+
+Quick start (local development)
+
+1. Clone the repo
+
+   git clone <your-repo-url>
+   cd insta_ai
+
+2. Backend setup
+
+   - Copy environment template and fill secrets:
+
+     cp backend/.env.example backend/.env
+
+   - Install dependencies and start backend:
+
+     cd backend
+     npm install
+     npm start
+
+   For development auto-restart use `npx nodemon server.js`.
+
+3. Frontend preview
+
+   Serve the `frontend/public` folder with a simple static server. Example (Python):
+
+     cd frontend/public
+     python -m http.server 5173
+
+   Open http://localhost:5173 in your browser and sign in.
+
+What to NOT commit
+
+- Do NOT commit real secret keys. `.env` is ignored via `.gitignore`.
+- Keep `node_modules/` out of source control.
+
+Recommended files already present
+
+- `.gitignore` — excludes node_modules, env files, logs and build artifacts.
+- `backend/.env.example` — copy for your local `.env` and CI.
+
+Preparing for GitHub
+
+1. Initialize git (if not already):
+
+   git init
+   git add .
+   git commit -m "Initial commit"
+
+2. Create a remote repo on GitHub and push:
+
+   git remote add origin git@github.com:YOUR_USER/YOUR_REPO.git
+   git branch -M main
+   git push -u origin main
+
+Next steps I can do for you
+
+- Add a `CONTRIBUTING.md` and PR template.
+- Create a GitHub Actions workflow to run lint/tests and deploy to Render.
+- Add an environment-specific `.env.production.example` and deployment docs.
+
+If you want, I can push the prepared changes (README + code edits) into a new git branch and show the exact git commands.
 # AI Persona Chat
 
 Create a chatbot that mimics the personality of any Instagram user.  

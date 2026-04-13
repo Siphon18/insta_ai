@@ -3,7 +3,7 @@
 window.APP_CONFIG = window.APP_CONFIG || {
   API_BASE_URL: 'https://insta-ai.onrender.com'
 };
-
+  
 (function setupApiBaseProxy() {
   var queryBase = '';
   try {
@@ -54,3 +54,9 @@ window.APP_CONFIG = window.APP_CONFIG || {
     return nativeFetch(rewritten, init);
   };
 })();
+
+// Force API base to deployed Render URL to ensure server-side TTS is used
+try {
+  window.__API_BASE_URL__ = 'https://insta-ai.onrender.com';
+  console.log('[config] Forced API base to', window.__API_BASE_URL__);
+} catch (e) {}
