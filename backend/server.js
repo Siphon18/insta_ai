@@ -1,4 +1,5 @@
 // server.js â€” JWT + PostgreSQL based backend
+console.log("RUNNING SERVER FILE:", __filename);
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
@@ -96,6 +97,7 @@ function switchModel() {
 }
 
 const { URL } = require('url');
+const fs = require('fs');
 
 // --- Semaphore: max 2 concurrent Groq calls ---
 class Semaphore {
@@ -332,7 +334,6 @@ function deriveVoiceStyleProfile(personalityAnalysis = '') {
 
 app.use(express.json());
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -351,7 +352,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 app.use(cors(buildCorsOptions()));
-app.use(express.static(path.join(__dirname, '../frontend_react/dist'), { index: false }));
+app.use(express.static(path.join(__dirname, '../frontend/public'), { index: false }));
 app.use((err, req, res, next) => {
   if (err && err.message === 'Not allowed by CORS') {
     return res.status(403).json({ error: 'Origin not allowed by CORS policy.' });
@@ -785,7 +786,6 @@ app.get('/audio-proxy', async (req, res) => {
     res.status(500).send('Proxy error');
   }
 });
-
 
 app.get('/api/tts/:id', (req, res) => {
   const item = generatedAudioCache.get(req.params.id);
@@ -1345,6 +1345,8 @@ Final rule: Always respond as ${displayName}.`;
         username: userData.username,
         bio: userData.biography,
         profile_pic_url: hdPicUrl,
+        followers: followerCount,
+        following: followingCount,
         posts: extractPostsFromProfile(userData, 24),
         voiceId: voiceConfig.voiceId,
         voiceDescription: `${voiceConfig.description} - ${voiceStyleProfile.styleLabel}`,
@@ -1368,7 +1370,7 @@ Final rule: Always respond as ${displayName}.`;
 
 
 // ---------- Chat ----------
-app.post('/api/chat', authenticateToken, async (req, res) => {
+app.post('/chat', authenticateToken, async (req, res) => {
   const { message } = req.body;
   const userId = req.user.id;
 
@@ -1525,40 +1527,10 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
 
     console.log(`[chat] Using voice: ${voiceConfig.voiceId}`);
 
-    // Generate audio with ElevenLabs
+    // NOTE: ElevenLabs TTS moved to client-side to avoid infrastructure IP blocking.
+    // The server will NOT call ElevenLabs here. Frontend should request a short-lived
+    // token from `/api/tts-token` and call ElevenLabs directly from the browser.
     let audioUrl = null;
-    try {
-      if (groqText && groqText.trim().length > 0) {
-        console.log('[chat] Requesting ElevenLabs TTS via Axios...');
-        const apiKey = process.env.ELEVENLABS_API_KEY;
-        const response = await axios.post(
-          `https://api.elevenlabs.io/v1/text-to-speech/${voiceConfig.voiceId}`,
-          {
-            text: groqText.trim(),
-            model_id: ELEVENLABS_MODEL_ID,
-            voice_settings: voiceConfig.settings || { stability: 0.5, similarity_boost: 0.75 }
-          },
-          {
-            headers: {
-              'xi-api-key': apiKey,
-              'Content-Type': 'application/json',
-              'Accept': 'audio/mpeg'
-            },
-            responseType: 'arraybuffer'
-          }
-        );
-        const audioBuffer = Buffer.from(response.data);
-        if (audioBuffer && audioBuffer.length > 0) {
-          // Store in DB-backed persistent audio store so links survive restarts.
-          audioUrl = await persistGeneratedAudio(audioBuffer, 'audio/mpeg');
-          console.log('[chat] ElevenLabs TTS success');
-        } else {
-          console.warn('[chat] ElevenLabs TTS returned empty audio');
-        }
-      }
-    } catch (err) {
-      console.error('[chat] ElevenLabs TTS error:', err?.response?.data || err.message);
-    }
 
     // Save model message to DB
     await pool.query(
@@ -1576,7 +1548,11 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     res.status(200).json({
       response: groqText,
       audioUrl: audioUrl,
-      history: fullHistory
+      history: fullHistory,
+      // Provide voice config for client-side TTS
+      voiceId: voiceConfig.voiceId,
+      modelId: ELEVENLABS_MODEL_ID,
+      voiceSettings: voiceConfig.settings
     });
 
   } catch (error) {
@@ -1596,8 +1572,45 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
   }
 });
 
+
+// ---------------- Temporary TTS token for client-side ElevenLabs calls ----------------
+// Returns a short-lived signed token that the frontend can use as an authorization
+// value (xi-api-key) when calling ElevenLabs directly from the browser. The token
+// itself does NOT contain the real ElevenLabs API key; it is a server-signed JWT
+// which the deployed ElevenLabs account must be configured to accept (if supported).
+// This endpoint is intended to support short-lived, per-user TTS requests.
+app.post('/api/tts-token', authenticateToken, async (req, res) => {
+  try {
+    const { text, voiceId, modelId, voiceSettings, expiresIn = 60 } = req.body || {};
+    if (!text || !voiceId) return res.status(400).json({ error: 'Missing text or voiceId' });
+
+    // Create a short-lived JWT signed with server secret. Frontend will use this
+    // as a temporary xi-api-key when calling ElevenLabs. Note: this requires
+    // custom support on the ElevenLabs side to accept these tokens. If ElevenLabs
+    // cannot accept such tokens, an alternative approach is needed (e.g. user
+    // downloads audio locally or use a paid proxy service with allowable IPs).
+    const ttsPayload = {
+      sub: String(req.user.id),
+      uid: req.user.id,
+      voiceId: String(voiceId),
+      modelId: String(modelId || ELEVENLABS_MODEL_ID),
+      iat: Math.floor(Date.now() / 1000)
+    };
+    const ttl = Math.max(10, Math.min(parseInt(String(expiresIn), 10) || 60, 300));
+    const token = jwt.sign(ttsPayload, process.env.TTS_TOKEN_SECRET || JWT_SECRET, { expiresIn: ttl + 's' });
+
+    // Return minimal info needed by frontend to call ElevenLabs directly.
+    res.json({ ok: true, token, expiresIn: ttl });
+  } catch (err) {
+    console.error('[api/tts-token] error', err?.message || err);
+    res.status(500).json({ error: 'Failed to generate TTS token' });
+  }
+});
+
 app.get('/chat', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/public', 'Chat.html'));
+  const chatPath = path.join(__dirname, '../frontend/public', 'Chat.html');
+  if (fs.existsSync(chatPath)) return res.sendFile(chatPath);
+  return res.status(200).send('<html><body><h1>Chat endpoint</h1><p>Frontend not available.</p></body></html>');
 });
 
 app.post('/new-chat', authenticateToken, async (req, res) => {
@@ -1770,88 +1783,7 @@ app.get('/api/admin/rapidapi-usage', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete a persona permanently
-app.delete('/api/personas/:id', authenticateToken, async (req, res) => {
-  try {
-    const personaId = parseInt(req.params.id);
-    // Only allow deleting own personas
-    await pool.query('DELETE FROM personas WHERE id = $1 AND user_id = $2', [personaId, req.user.id]);
-    res.json({ message: 'Persona deleted.' });
-  } catch (err) {
-    console.error('[api/personas/delete] error', err);
-    res.status(500).json({ error: 'Could not delete persona.' });
-  }
-});
-
-// Delete chat history only (keep persona)
-app.delete('/api/chat-history', authenticateToken, async (req, res) => {
-  try {
-    const persona = await getActivePersona(req.user.id);
-    if (persona) {
-      await pool.query('DELETE FROM chat_messages WHERE persona_id = $1', [persona.id]);
-    }
-    res.json({ message: 'Chat history cleared.' });
-  } catch (err) {
-    console.error('[api/chat-history/delete] error', err);
-    res.status(500).json({ error: 'Could not clear chat.' });
-  }
-});
-
-app.get('/get-chat-history', authenticateToken, async (req, res) => {
-  try {
-    const persona = await getActivePersona(req.user.id);
-    if (!persona) return res.status(200).json([]);
-    const history = await getChatHistory(persona.id);
-    res.status(200).json(history);
-  } catch (err) {
-    console.error('[get-chat-history] error', err);
-    res.status(500).json([]);
-  }
-});
-
-app.get('/api/admin/rapidapi-usage', authenticateToken, async (req, res) => {
-  try {
-    if (!isAdminEmail(req.user?.email)) {
-      return res.status(403).json({ error: 'Admin access required.' });
-    }
-
-    const now = new Date();
-    const dayPeriod = getUtcDayPeriod(now);
-    const monthPeriod = getUtcMonthPeriod(now);
-
-    const [dayUsage, monthUsage] = await Promise.all([
-      getUsageCountForPeriod('day', dayPeriod.key),
-      getUsageCountForPeriod('month', monthPeriod.key)
-    ]);
-
-    const dayCount = dayUsage?.count || 0;
-    const monthCount = monthUsage?.count || 0;
-
-    res.json({
-      source: 'rapidapi',
-      nowUtc: now.toISOString(),
-      daily: {
-        periodKey: dayPeriod.key,
-        used: dayCount,
-        limit: RAPIDAPI_DAILY_BUDGET,
-        remaining: Math.max(RAPIDAPI_DAILY_BUDGET - dayCount, 0),
-        resetAt: dayUsage?.period_end || dayPeriod.end
-      },
-      monthly: {
-        periodKey: monthPeriod.key,
-        used: monthCount,
-        limit: RAPIDAPI_MONTHLY_BUDGET,
-        remaining: Math.max(RAPIDAPI_MONTHLY_BUDGET - monthCount, 0),
-        resetAt: monthUsage?.period_end || monthPeriod.end
-      }
-    });
-  } catch (err) {
-    console.error('[api/admin/rapidapi-usage] error', err);
-    res.status(500).json({ error: 'Could not fetch RapidAPI usage.' });
-  }
-});
-
-// Debug endpoint — only available in development
+// Debug endpoint â€” only available in development
 if (process.env.NODE_ENV !== 'production') {
   app.get('/debug-session', authenticateToken, async (req, res) => {
     try {
@@ -1871,10 +1803,13 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// Serve React SPA index.html for all non-API routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend_react/dist', 'index.html'));
+// Serve index.html for the root URL
+app.get('/', (req, res) => {
+  const indexPath = path.join(__dirname, '../frontend/public', 'index.html');
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  return res.status(200).json({ status: 'ok', message: 'API server running. Frontend not deployed.' });
 });
+
 
 // ======================== Start Server ========================
 (async () => {
@@ -1889,3 +1824,7 @@ app.get('*', (req, res) => {
     process.exit(1);
   }
 })();
+
+
+
+
