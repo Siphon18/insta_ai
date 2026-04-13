@@ -73,12 +73,18 @@
     .delay-2 { animation-delay: .3s; }
     .delay-3 { animation-delay: .45s; }
 
+    /* slide fade animations */
+    .slide-fade-left { opacity: 0; transform: translateX(-20px); transition: transform .6s cubic-bezier(.22,1,.36,1), opacity .6s; }
+    .slide-fade-right { opacity: 0; transform: translateX(20px); transition: transform .6s cubic-bezier(.22,1,.36,1), opacity .6s; }
+    .slide-fade-left.in, .slide-fade-right.in { opacity: 1; transform: translateX(0); }
+
     /* avatar float */
     @keyframes avatar-float {
       0%,100% { transform: translateY(0); }
       50%     { transform: translateY(-6px); }
     }
     .avatar-float { animation: avatar-float 3s ease-in-out infinite; }
+
     /* posts grid */
     .posts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border-radius: 12px; overflow: hidden; }
     .post-thumb { position: relative; aspect-ratio: 1; overflow: hidden; cursor: pointer; }
@@ -142,86 +148,93 @@
 
     <!-- main -->
     <main class="flex-grow flex items-center justify-center px-4 py-12">
-      <div class="max-w-md w-full">
-        <div class="glass rounded-2xl p-8 md:p-10 shadow-2xl shadow-primary/5 animate-fade-up">
-          <h2 class="text-2xl md:text-3xl font-bold text-white tracking-tight text-center mb-2 animate-fade-up delay-1">
-            Confirm <span class="gradient-text">Persona</span>
-          </h2>
-          <p class="text-sm text-gray-400 text-center mb-8 animate-fade-up delay-1">
-            Review the profile below and confirm to start chatting.
-          </p>
+      <div class="max-w-6xl w-full">
 
-          <!-- profile card -->
-          <div id="profile-details" class="flex flex-col items-center gap-4 mb-8 animate-fade-up delay-2">
-            <div class="avatar-float">
-              <div class="insta-ring">
-                <img id="profile-pic" class="w-24 h-24 rounded-full object-cover bg-slate-800" src="https://via.placeholder.com/150" alt="Profile Picture" />
+        <!-- ✅ FIXED: Both panels side-by-side using flex row -->
+        <div class="flex flex-col md:flex-row gap-6 items-start justify-center">
+
+          <!-- Confirm panel (left) -->
+          <div id="confirm-panel" class="w-full md:flex-1 md:max-w-xl">
+            <div class="glass rounded-2xl p-8 md:p-10 shadow-2xl shadow-primary/5 animate-fade-up slide-fade-left">
+              <h2 class="text-2xl md:text-3xl font-bold text-white tracking-tight text-center mb-2 animate-fade-up delay-1">
+                Confirm <span class="gradient-text">Persona</span>
+              </h2>
+              <p class="text-sm text-gray-400 text-center mb-8 animate-fade-up delay-1">
+                Review the profile below and confirm to start chatting.
+              </p>
+
+              <!-- profile card -->
+              <div id="profile-details" class="flex flex-col items-center gap-4 mb-8 animate-fade-up delay-2">
+                <div class="avatar-float">
+                  <div class="insta-ring">
+                    <img id="profile-pic" class="w-24 h-24 rounded-full object-cover bg-slate-800" src="https://via.placeholder.com/150" alt="Profile Picture" />
+                  </div>
+                </div>
+                <div class="text-center">
+                  <p id="full-name" class="text-xl font-bold text-white"></p>
+                  <p id="username" class="text-sm font-semibold text-primary tracking-wide mt-0.5"></p>
+                </div>
+                <div class="text-center mt-6">
+                  <a href="/add-username.html" class="text-sm text-gray-500 hover:text-primary transition-colors duration-300 inline-flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">arrow_back</span>
+                    Change username
+                  </a>
+                </div>
+              </div>
+
+              <!-- bio -->
+              <div class="bg-white/5 border border-white/5 rounded-xl p-5 mb-8 animate-fade-up delay-2">
+                <p class="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">
+                  <span class="material-symbols-outlined text-sm">description</span> Bio
+                </p>
+                <p id="bio" class="text-sm text-gray-300 leading-relaxed"></p>
+              </div>
+
+              <!-- actions -->
+              <div class="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-up delay-3">
+                <button id="confirmBtn"
+                  class="w-full sm:w-auto btn-shimmer text-white font-bold text-base py-3 px-10 rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                  <span class="material-symbols-outlined text-lg">check_circle</span>
+                  Confirm
+                </button>
+                <a href="/add-username.html"
+                  class="w-full sm:w-auto bg-white/5 border border-white/10 text-gray-300 font-bold text-base py-3 px-10 rounded-xl hover:bg-white/10 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                  <span class="material-symbols-outlined text-lg">edit</span>
+                  Edit
+                </a>
               </div>
             </div>
-            <div class="text-center">
-              <p id="full-name" class="text-xl font-bold text-white"></p>
-              <p id="username" class="text-sm font-semibold text-primary tracking-wide mt-0.5"></p>
+          </div>
+
+          <!-- Posts panel (right) -->
+          <aside id="posts-panel" class="w-full md:w-80 self-start slide-fade-right opacity-0 md:sticky md:top-28">
+            <div class="glass rounded-2xl p-6 shadow-2xl shadow-primary/5">
+              <h3 class="text-lg font-bold text-white flex items-center gap-2 mb-4">
+                <span class="material-symbols-outlined text-primary">grid_view</span>
+                Recent Posts
+              </h3>
+
+              <!-- loading skeleton -->
+              <div id="posts-loading" class="posts-grid">
+                <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+                <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+                <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+                <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+                <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+                <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
+              </div>
+
+              <!-- actual grid -->
+              <div id="posts-grid" class="posts-grid" style="display:none"></div>
+
+              <!-- message for private / unavailable -->
+              <div id="posts-message" class="hidden text-center py-8">
+                <span class="material-symbols-outlined text-4xl text-gray-600 mb-2 block">lock</span>
+                <p id="posts-message-text" class="text-sm text-gray-400"></p>
+              </div>
             </div>
-          </div>
+          </aside>
 
-          <!-- bio -->
-          <div class="bg-white/5 border border-white/5 rounded-xl p-5 mb-8 animate-fade-up delay-2">
-            <p class="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-wider font-semibold mb-2">
-              <span class="material-symbols-outlined text-sm">description</span> Bio
-            </p>
-            <p id="bio" class="text-sm text-gray-300 leading-relaxed"></p>
-          </div>
-
-          <!-- actions -->
-          <div class="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-up delay-3">
-            <button id="confirmBtn"
-              class="w-full sm:w-auto btn-shimmer text-white font-bold text-base py-3 px-10 rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
-              <span class="material-symbols-outlined text-lg">check_circle</span>
-              Confirm
-            </button>
-            <a href="/add-username.html"
-              class="w-full sm:w-auto bg-white/5 border border-white/10 text-gray-300 font-bold text-base py-3 px-10 rounded-xl hover:bg-white/10 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
-              <span class="material-symbols-outlined text-lg">edit</span>
-              Edit
-            </a>
-          </div>
-        </div>
-
-        <!-- back -->
-        <div class="text-center mt-6 animate-fade-up" style="animation-delay:.5s">
-          <a href="/add-username.html" class="text-sm text-gray-500 hover:text-primary transition-colors duration-300 inline-flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm">arrow_back</span>
-            Change username
-          </a>
-        </div>
-
-        <!-- Instagram Posts Section -->
-        <div id="posts-section" class="mt-8 animate-fade-up" style="animation-delay:.6s">
-          <div class="glass rounded-2xl p-6 shadow-2xl shadow-primary/5">
-            <h3 class="text-lg font-bold text-white flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-primary">grid_view</span>
-              Recent Posts
-            </h3>
-
-            <!-- loading skeleton -->
-            <div id="posts-loading" class="posts-grid">
-              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
-              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
-              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
-              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
-              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
-              <div class="post-thumb skeleton" style="aspect-ratio:1"></div>
-            </div>
-
-            <!-- actual grid -->
-            <div id="posts-grid" class="posts-grid" style="display:none"></div>
-
-            <!-- message for private / unavailable -->
-            <div id="posts-message" class="hidden text-center py-8">
-              <span class="material-symbols-outlined text-4xl text-gray-600 mb-2 block">lock</span>
-              <p id="posts-message-text" class="text-sm text-gray-400"></p>
-            </div>
-          </div>
         </div>
       </div>
     </main>
@@ -290,15 +303,20 @@
       document.getElementById('confirmBtn').addEventListener('click', () => {
         const persona = JSON.parse(localStorage.getItem('personaData'));
         if (!persona || !persona.username) {
-          alert('Persona data missing â€” please add username first.');
+          alert('Persona data missing — please add username first.');
           window.location.href = '/add-username.html';
           return;
         }
-        window.location.href = '/chat';
+        window.location.href = '/chat.html';
       });
 
       // Load cached posts first, then fetch only if needed.
       if (personaData && personaData.username) {
+        const postsPanel = document.getElementById('posts-panel');
+        setTimeout(() => {
+          try { postsPanel.classList.add('in'); postsPanel.classList.remove('opacity-0'); } catch (e) {}
+        }, 350);
+
         fetchPosts(personaData.username, Array.isArray(personaData.posts) ? personaData.posts : []);
       }
     });
@@ -369,7 +387,6 @@
 
         loading.style.display = 'none';
 
-        // If API returned a message (private / error)
         if (data.message || !data.posts || data.posts.length === 0) {
           msgBox.classList.remove('hidden');
           msgText.textContent = data.message || `No posts found for @${username}.`;
@@ -392,4 +409,3 @@
   </script>
 </body>
 </html>
-

@@ -442,17 +442,28 @@
           const response = await fetch('/get-voices');
           if (!response.ok) return;
           const voices = await response.json();
-
           const prettyLabel = (voice) => {
             const style = voice.style || 'Conversational';
             const desc = voice.description || 'Balanced';
             return `${desc} (${style})`;
           };
 
+          // Whitelist of default/free ElevenLabs voice IDs to expose in the UI.
+          // Only voices in this set will be shown in the dropdown to avoid selecting
+          // premium/library voices that may return 402 from the ElevenLabs API.
+          const FREE_VOICE_IDS = new Set([
+            'JBFqnCBsd6RMkjVDRZzb', // default public voice
+            'EXAVITQu4vr4xnSDxMaL',
+            'ErXwobaYiN019PkySvjV',
+            'MF3mGyEYCl7XYWbV9V6O',
+            'N2lVS1w4EtoT3dr4eOWO'
+          ]);
+
           const maleOptgroup = document.createElement('optgroup');
           maleOptgroup.label = 'Male Voices';
           maleOptgroup.className = 'bg-slate-900 text-gray-400 font-semibold';
           voices.male.forEach((voice) => {
+            if (!FREE_VOICE_IDS.has(voice.voiceId)) return; // skip premium voices
             const option = document.createElement('option');
             option.value = voice.voiceId;
             option.textContent = prettyLabel(voice);
@@ -465,6 +476,7 @@
           femaleOptgroup.label = 'Female Voices';
           femaleOptgroup.className = 'bg-slate-900 text-gray-400 font-semibold';
           voices.female.forEach((voice) => {
+            if (!FREE_VOICE_IDS.has(voice.voiceId)) return; // skip premium voices
             const option = document.createElement('option');
             option.value = voice.voiceId;
             option.textContent = prettyLabel(voice);
@@ -473,8 +485,9 @@
             femaleOptgroup.appendChild(option);
           });
 
-          voiceSelect.appendChild(maleOptgroup);
-          voiceSelect.appendChild(femaleOptgroup);
+          // Only append groups that have options (avoids empty optgroups)
+          if (maleOptgroup.children.length) voiceSelect.appendChild(maleOptgroup);
+          if (femaleOptgroup.children.length) voiceSelect.appendChild(femaleOptgroup);
         } catch (error) {
           console.error('Could not load voice options:', error);
         }

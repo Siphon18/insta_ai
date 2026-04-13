@@ -351,7 +351,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 app.use(cors(buildCorsOptions()));
-app.use(express.static(path.join(__dirname, '../frontend/public'), { index: false }));
+app.use(express.static(path.join(__dirname, '../frontend_react/dist'), { index: false }));
 app.use((err, req, res, next) => {
   if (err && err.message === 'Not allowed by CORS') {
     return res.status(403).json({ error: 'Origin not allowed by CORS policy.' });
@@ -785,6 +785,7 @@ app.get('/audio-proxy', async (req, res) => {
     res.status(500).send('Proxy error');
   }
 });
+
 
 app.get('/api/tts/:id', (req, res) => {
   const item = generatedAudioCache.get(req.params.id);
@@ -1367,7 +1368,7 @@ Final rule: Always respond as ${displayName}.`;
 
 
 // ---------- Chat ----------
-app.post('/chat', authenticateToken, async (req, res) => {
+app.post('/api/chat', authenticateToken, async (req, res) => {
   const { message } = req.body;
   const userId = req.user.id;
 
@@ -1769,7 +1770,88 @@ app.get('/api/admin/rapidapi-usage', authenticateToken, async (req, res) => {
   }
 });
 
-// Debug endpoint â€” only available in development
+// Delete a persona permanently
+app.delete('/api/personas/:id', authenticateToken, async (req, res) => {
+  try {
+    const personaId = parseInt(req.params.id);
+    // Only allow deleting own personas
+    await pool.query('DELETE FROM personas WHERE id = $1 AND user_id = $2', [personaId, req.user.id]);
+    res.json({ message: 'Persona deleted.' });
+  } catch (err) {
+    console.error('[api/personas/delete] error', err);
+    res.status(500).json({ error: 'Could not delete persona.' });
+  }
+});
+
+// Delete chat history only (keep persona)
+app.delete('/api/chat-history', authenticateToken, async (req, res) => {
+  try {
+    const persona = await getActivePersona(req.user.id);
+    if (persona) {
+      await pool.query('DELETE FROM chat_messages WHERE persona_id = $1', [persona.id]);
+    }
+    res.json({ message: 'Chat history cleared.' });
+  } catch (err) {
+    console.error('[api/chat-history/delete] error', err);
+    res.status(500).json({ error: 'Could not clear chat.' });
+  }
+});
+
+app.get('/get-chat-history', authenticateToken, async (req, res) => {
+  try {
+    const persona = await getActivePersona(req.user.id);
+    if (!persona) return res.status(200).json([]);
+    const history = await getChatHistory(persona.id);
+    res.status(200).json(history);
+  } catch (err) {
+    console.error('[get-chat-history] error', err);
+    res.status(500).json([]);
+  }
+});
+
+app.get('/api/admin/rapidapi-usage', authenticateToken, async (req, res) => {
+  try {
+    if (!isAdminEmail(req.user?.email)) {
+      return res.status(403).json({ error: 'Admin access required.' });
+    }
+
+    const now = new Date();
+    const dayPeriod = getUtcDayPeriod(now);
+    const monthPeriod = getUtcMonthPeriod(now);
+
+    const [dayUsage, monthUsage] = await Promise.all([
+      getUsageCountForPeriod('day', dayPeriod.key),
+      getUsageCountForPeriod('month', monthPeriod.key)
+    ]);
+
+    const dayCount = dayUsage?.count || 0;
+    const monthCount = monthUsage?.count || 0;
+
+    res.json({
+      source: 'rapidapi',
+      nowUtc: now.toISOString(),
+      daily: {
+        periodKey: dayPeriod.key,
+        used: dayCount,
+        limit: RAPIDAPI_DAILY_BUDGET,
+        remaining: Math.max(RAPIDAPI_DAILY_BUDGET - dayCount, 0),
+        resetAt: dayUsage?.period_end || dayPeriod.end
+      },
+      monthly: {
+        periodKey: monthPeriod.key,
+        used: monthCount,
+        limit: RAPIDAPI_MONTHLY_BUDGET,
+        remaining: Math.max(RAPIDAPI_MONTHLY_BUDGET - monthCount, 0),
+        resetAt: monthUsage?.period_end || monthPeriod.end
+      }
+    });
+  } catch (err) {
+    console.error('[api/admin/rapidapi-usage] error', err);
+    res.status(500).json({ error: 'Could not fetch RapidAPI usage.' });
+  }
+});
+
+// Debug endpoint — only available in development
 if (process.env.NODE_ENV !== 'production') {
   app.get('/debug-session', authenticateToken, async (req, res) => {
     try {
@@ -1789,11 +1871,10 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// Serve index.html for the root URL
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/public', 'index.html'));
+// Serve React SPA index.html for all non-API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend_react/dist', 'index.html'));
 });
-
 
 // ======================== Start Server ========================
 (async () => {
@@ -1808,7 +1889,3 @@ app.get('/', (req, res) => {
     process.exit(1);
   }
 })();
-
-
-
-

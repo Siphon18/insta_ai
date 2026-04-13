@@ -15,7 +15,6 @@
   <style>
     body { font-family: 'Space Grotesk', sans-serif; }
 
-    /* background */
     @keyframes gradient-shift {
       0%   { background-position: 0% 50%; }
       50%  { background-position: 100% 50%; }
@@ -48,19 +47,16 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
 
-    @keyframes shimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
     .btn-shimmer {
       background: linear-gradient(135deg, #833ab4 0%, #e1306c 50%, #fcb045 100%);
     }
 
-    /* messages */
     @keyframes msg-in {
       0%   { opacity: 0; transform: translateY(12px) scale(.97); }
       100% { opacity: 1; transform: translateY(0) scale(1); }
     }
     .chat-message { animation: msg-in .4s cubic-bezier(.22,1,.36,1) forwards; }
 
-    /* typing */
     @keyframes pulse-dot {
       0%,100% { transform: translateY(0); opacity: .5; }
       50%     { transform: translateY(-4px); opacity: 1; }
@@ -69,16 +65,13 @@
     .typing-dot:nth-child(2) { animation-delay: .15s; }
     .typing-dot:nth-child(3) { animation-delay: .3s; }
 
-    /* input glow */
     .input-glow:focus-within {
       box-shadow: 0 0 0 2px rgba(225,48,108,.35), 0 0 24px -4px rgba(131,58,180,.15);
     }
 
-    /* message bubble hover */
     .bubble-hover { transition: background .2s ease, box-shadow .3s ease; }
     .bubble-hover:hover { box-shadow: 0 4px 20px -6px rgba(0,0,0,.3); }
 
-    /* sidebar */
     .insta-ring-sm {
       background: conic-gradient(from 0deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75);
       padding: 2px; border-radius: 50%; animation: ring-rot 6s linear infinite;
@@ -94,13 +87,11 @@
       display: flex; align-items: center; justify-content: center;
     }
 
-    /* scrollbar */
     #chat-container::-webkit-scrollbar { width: 6px; }
     #chat-container::-webkit-scrollbar-track { background: transparent; }
     #chat-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 3px; }
     #chat-container::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.2); }
 
-    /* insta carousel */
     .insta-carousel { height: 420px; display: flex; align-items: center; justify-content: center; }
     .insta-track { display: flex; height: 100%; transition: transform 520ms cubic-bezier(.2,.9,.3,1); will-change: transform; }
     .insta-slide { min-width: 100%; height: 100%; padding: 4px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
@@ -113,7 +104,13 @@
     }
     .voice-indicator .material-symbols-outlined { font-size: 14px; }
 
-    /* entrance */
+    /* Audio play button pulse when playing */
+    @keyframes audio-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.6; transform: scale(1.15); }
+    }
+    .audio-playing { animation: audio-pulse 1s ease-in-out infinite; color: #e1306c !important; }
+
     @keyframes fade-up { 0%{ opacity:0; transform:translateY(16px);} 100%{ opacity:1; transform:translateY(0);} }
     .animate-fade-up { animation: fade-up .5s cubic-bezier(.22,1,.36,1) forwards; opacity: 0; }
   </style>
@@ -176,7 +173,6 @@
     <main class="flex flex-1 flex-col xl:flex-row overflow-hidden">
       <!-- Chat area -->
       <div class="flex flex-1 flex-col p-4 md:p-6">
-        <!-- Messages -->
         <div id="chat-container" class="flex-1 space-y-6 overflow-y-auto pr-2 scroll-smooth">
           <div class="flex flex-col gap-3 animate-fade-up">
             <h2 class="text-2xl font-bold text-white">Chat with an <span class="instagram-gradient">Instagram</span> Persona</h2>
@@ -209,7 +205,7 @@
       <!-- Sidebar -->
       <aside class="hidden xl:flex w-96 border-l border-white/5 p-6 flex-col space-y-6 overflow-y-auto backdrop-blur-sm bg-black/10">
         <div id="persona-info" class="space-y-4">
-          <div class="text-sm text-gray-500 italic">Loading personaâ€¦</div>
+          <div class="text-sm text-gray-500 italic">Loading persona…</div>
         </div>
 
         <div id="instagram-widget" class="flex flex-col space-y-4">
@@ -238,7 +234,7 @@
   </div>
 
   <script>
-    // Auth helper
+    // ── Auth helpers ──────────────────────────────────────────────────────────
     function getToken() { return localStorage.getItem('token'); }
     function authHeaders(extra = {}) { return { 'Authorization': 'Bearer ' + getToken(), ...extra }; }
     function authFetch(url, opts = {}) {
@@ -250,7 +246,7 @@
       });
     }
 
-    // Verify token with server before loading
+    // Verify token before loading page
     (async () => {
       const token = getToken();
       if (!token) { window.location.href = '/login.html'; return; }
@@ -265,55 +261,89 @@
     })();
 
     document.addEventListener('DOMContentLoaded', async () => {
-      const chatContainer = document.getElementById('chat-container');
-      const chatForm = document.getElementById('chat-form');
-      const messageInput = document.getElementById('message-input');
-      const newChatBtn = document.getElementById('new-chat-btn');
-      const micBtn = document.getElementById('mic-btn');
-      const adminUsagePill = document.getElementById('admin-usage-pill');
-      const adminUsagePillText = document.getElementById('admin-usage-pill-text');
+      const chatContainer     = document.getElementById('chat-container');
+      const chatForm          = document.getElementById('chat-form');
+      const messageInput      = document.getElementById('message-input');
+      const newChatBtn        = document.getElementById('new-chat-btn');
+      const micBtn            = document.getElementById('mic-btn');
+      const adminUsagePill    = document.getElementById('admin-usage-pill');
+      const adminUsagePillText= document.getElementById('admin-usage-pill-text');
 
-      let isSubmitting = false;
+      let isSubmitting      = false;
       let currentSlideIndex = 0;
-      let totalSlides = 0;
+      let totalSlides       = 0;
+
+      // ── Shared audio instance: only ONE playing at a time ─────────────────
+      let currentAudio = null;
 
       function resolveApiMediaUrl(url) {
         if (!url) return url;
         if (/^https?:\/\//i.test(url)) return url;
         const base = (window.__API_BASE_URL__ || '').trim();
         if (!base) return url;
-        if (url.startsWith('/')) return `${base}${url}`;
-        return `${base}/${url}`;
+        return url.startsWith('/') ? `${base}${url}` : `${base}/${url}`;
       }
 
+      // ── Persona data ──────────────────────────────────────────────────────
       const personaData = (() => { try { return JSON.parse(localStorage.getItem('personaData')); } catch(e) { return null; } })();
       const personaName = personaData?.name || 'AI Persona';
-      const voiceInfo = personaData?.voiceDescription || null;
+      const voiceInfo   = personaData?.voiceDescription || null;
+
       let aiPersonaPicUrl = null;
-      if (personaData && personaData.profile_pic_url) {
+      if (personaData?.profile_pic_url) {
         aiPersonaPicUrl = resolveApiMediaUrl('/api/image-proxy?url=' + encodeURIComponent(personaData.profile_pic_url));
       } else {
         aiPersonaPicUrl = localStorage.getItem('aiPersonaPic') || null;
-        if (aiPersonaPicUrl && aiPersonaPicUrl.startsWith('/image-proxy')) {
+        if (aiPersonaPicUrl?.startsWith('/image-proxy')) {
           aiPersonaPicUrl = aiPersonaPicUrl.replace('/image-proxy', '/api/image-proxy');
           localStorage.setItem('aiPersonaPic', aiPersonaPicUrl);
         }
       }
       aiPersonaPicUrl = resolveApiMediaUrl(aiPersonaPicUrl);
 
-      // Anime avatar for user (persisted per session via localStorage)
-      const isFemaleVoice = ['Natalie','Ruby','Daisy'].some(v => (personaData?.voiceId || '').includes(v));
+      // Anime avatar for user
       let userSeed = localStorage.getItem('userAvatarSeed');
       if (!userSeed) { userSeed = 'user-' + Math.random().toString(36).substring(2, 8); localStorage.setItem('userAvatarSeed', userSeed); }
-      const avatarStyle = isFemaleVoice ? 'lorelei' : 'adventurer';
-      const userPicUrl = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(userSeed)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf&radius=50`;
+      const userPicUrl = `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(userSeed)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf&radius=50`;
 
       document.getElementById('header-user-pic').style.backgroundImage = `url("${aiPersonaPicUrl || userPicUrl}")`;
-      document.getElementById('user-input-pic').style.backgroundImage = `url("${userPicUrl}")`;
+      document.getElementById('user-input-pic').style.backgroundImage  = `url("${userPicUrl}")`;
 
       if (micBtn) micBtn.addEventListener('click', () => { window.location.href = '/voice-chat.html'; });
 
-      // Instagram
+      // ── ElevenLabs audio player ───────────────────────────────────────────
+      /**
+       * Plays the ElevenLabs audio URL.
+       * Returns the HTMLAudioElement so the caller can attach a play button.
+       * Does NOT fall back to browser TTS — if it fails, it fails silently.
+       */
+      function playElevenLabsAudio(audioUrl) {
+        if (!audioUrl) return null;
+
+        // Stop any audio currently playing
+        if (currentAudio) {
+          try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (_) {}
+          currentAudio = null;
+        }
+
+        const resolvedUrl = resolveApiMediaUrl(audioUrl);
+        const audio = new Audio(resolvedUrl);
+        currentAudio = audio;
+
+        // Must be triggered by a user gesture (the send-button click counts).
+        // We return the audio object so the bubble can attach a replay button.
+        audio.play().then(() => {
+          console.log('[TTS] ElevenLabs audio playing:', resolvedUrl);
+        }).catch(err => {
+          // Autoplay blocked — user will use the play button instead.
+          console.warn('[TTS] Autoplay blocked, user can tap ▶ to play:', err.message);
+        });
+
+        audio.addEventListener('ended', () => { currentAudio = null; });
+        return audio;
+      }
+
+      // ── Instagram carousel ────────────────────────────────────────────────
       const INSTAGRAM_POSTS_ENDPOINT = '/instagram-posts';
       const DEFAULT_IMAGE_LIMIT = 12;
 
@@ -327,23 +357,15 @@
       async function loadAdminUsagePill() {
         try {
           const resp = await fetch('/api/admin/rapidapi-usage', { headers: authHeaders() });
-          if (resp.status === 401) return;
-          if (resp.status === 403) {
-            if (adminUsagePill) adminUsagePill.classList.add('hidden');
-            return;
-          }
+          if (resp.status === 401 || resp.status === 403) return;
           if (!resp.ok) return;
-
           const data = await resp.json();
           if (!adminUsagePill || !adminUsagePillText) return;
-          const daily = data.daily || {};
-          const monthly = data.monthly || {};
+          const daily = data.daily || {}, monthly = data.monthly || {};
           adminUsagePillText.textContent = `API D:${daily.used ?? 0}/${daily.limit ?? 0} M:${monthly.used ?? 0}/${monthly.limit ?? 0}`;
           adminUsagePill.classList.remove('hidden');
           adminUsagePill.classList.add('inline-flex');
-        } catch (err) {
-          console.error('[admin-usage-pill]', err);
-        }
+        } catch (err) { console.error('[admin-usage-pill]', err); }
       }
 
       async function fetchInstagramPosts(username, limit = DEFAULT_IMAGE_LIMIT) {
@@ -352,28 +374,23 @@
         try {
           const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
           if (cached && Array.isArray(cached.images) && cached.images.length && (Date.now() - Number(cached.ts || 0) < 10 * 60 * 1000)) {
-            setInstaStatus('');
-            return cached.images;
+            setInstaStatus(''); return cached.images;
           }
         } catch (_) {}
         try {
           setInstaStatus('Loading...');
-          const resp = await fetch(`/instagram-posts?username=${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`);
+          const resp = await fetch(`/instagram-posts?username=${encodeURIComponent(username)}&limit=${limit}`);
           if (resp.status === 429) {
             const payload = await resp.json().catch(() => ({}));
             const retryAfterSec = parseInt(payload.retryAfterSec || '0', 10) || 0;
-            setInstaStatus(retryAfterSec > 0 ? `Rate-limited, retry in ~${retryAfterSec}s` : 'Rate-limited, retry soon');
+            setInstaStatus(retryAfterSec > 0 ? `Rate-limited, retry in ~${retryAfterSec}s` : 'Rate-limited');
             return [];
           }
           if (!resp.ok) { setInstaStatus('Failed'); return []; }
           const json = await resp.json();
-          const posts = Array.isArray(json.posts) ? json.posts : [];
-          const images = posts.map(p => p.image_url).filter(Boolean);
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), images }));
-          } catch (_) {}
-          setInstaStatus('');
-          return images;
+          const images = (Array.isArray(json.posts) ? json.posts : []).map(p => p.image_url).filter(Boolean);
+          try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), images })); } catch (_) {}
+          setInstaStatus(''); return images;
         } catch (err) { setInstaStatus('Error'); return []; }
       }
 
@@ -389,20 +406,15 @@
         const empty = document.querySelector('#insta-carousel .insta-empty');
         if (!track) return;
         track.innerHTML = '';
-        if (!images || !images.length) { if (empty) empty.style.display = 'block'; totalSlides = 0; return; }
+        if (!images?.length) { if (empty) empty.style.display = 'block'; totalSlides = 0; return; }
         if (empty) empty.style.display = 'none';
-        totalSlides = images.length;
-        currentSlideIndex = 0;
+        totalSlides = images.length; currentSlideIndex = 0;
         images.forEach((src, i) => {
           const slide = document.createElement('div');
-          slide.className = 'insta-slide';
-          slide.dataset.index = i;
+          slide.className = 'insta-slide'; slide.dataset.index = i;
           const img = document.createElement('img');
-          img.src = proxiedImageUrl(src);
-          img.alt = `Post ${i + 1}`;
-          img.loading = 'lazy';
-          slide.appendChild(img);
-          track.appendChild(slide);
+          img.src = proxiedImageUrl(src); img.alt = `Post ${i + 1}`; img.loading = 'lazy';
+          slide.appendChild(img); track.appendChild(slide);
         });
         updateCarouselPosition();
       }
@@ -417,7 +429,7 @@
       document.getElementById('insta-prev')?.addEventListener('click', () => { if (!totalSlides) return; currentSlideIndex = (currentSlideIndex - 1 + totalSlides) % totalSlides; updateCarouselPosition(); });
       document.getElementById('insta-next')?.addEventListener('click', () => { if (!totalSlides) return; currentSlideIndex = (currentSlideIndex + 1) % totalSlides; updateCarouselPosition(); });
 
-      // â”€â”€ Message helpers â”€â”€
+      // ── Chat message helpers ──────────────────────────────────────────────
       function addTypingIndicator() {
         if (!chatContainer || document.getElementById('typing-indicator-dyn')) return;
         const div = document.createElement('div');
@@ -430,11 +442,14 @@
 
         const content = document.createElement('div');
         content.className = 'flex flex-col gap-1';
+
         const name = document.createElement('p');
         name.className = 'text-xs font-semibold text-gray-400';
         name.textContent = personaName;
+
         const bubble = document.createElement('div');
         bubble.className = 'rounded-xl p-3 bg-white/5 border border-white/5';
+
         const dots = document.createElement('div');
         dots.className = 'flex items-center space-x-1.5';
         for (let i = 0; i < 3; i++) {
@@ -452,8 +467,7 @@
       }
 
       function removeTypingIndicator() {
-        const el = document.getElementById('typing-indicator-dyn');
-        if (el) el.remove();
+        document.getElementById('typing-indicator-dyn')?.remove();
       }
 
       function addMessage(sender, text, isUser = false) {
@@ -466,12 +480,14 @@
 
         const content = document.createElement('div');
         content.className = 'flex flex-col gap-1';
+
         const name = document.createElement('p');
         name.className = `text-xs font-semibold ${isUser ? 'text-right' : ''} text-gray-400`;
         name.textContent = sender;
 
         const bubble = document.createElement('div');
         bubble.className = `rounded-xl p-3 max-w-md bubble-hover ${isUser ? 'bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white' : 'bg-white/5 border border-white/5 text-gray-200'}`;
+
         const textEl = document.createElement('p');
         textEl.className = 'text-sm leading-relaxed';
         textEl.textContent = text;
@@ -494,10 +510,12 @@
         pic.className = 'h-9 w-9 shrink-0 rounded-full bg-cover bg-center ring-1 ring-white/10';
         pic.style.backgroundImage = `url("${aiPersonaPicUrl || userPicUrl}")`;
 
-        const content = document.createElement('div');
+        const content  = document.createElement('div');
         content.className = 'flex flex-col gap-1';
+
         const senderInfo = document.createElement('div');
         senderInfo.className = 'flex items-center gap-2';
+
         const name = document.createElement('p');
         name.className = 'text-xs font-semibold text-gray-400';
         name.textContent = personaName;
@@ -505,6 +523,7 @@
 
         const bubble = document.createElement('div');
         bubble.className = 'rounded-xl p-3 max-w-md bg-white/5 border border-white/5 bubble-hover';
+
         const textEl = document.createElement('p');
         textEl.className = 'text-sm text-gray-200 leading-relaxed';
         bubble.appendChild(textEl);
@@ -529,122 +548,136 @@
         }
       }
 
-      async function fetchAndRenderReply(userMessage = "", _retryCount = 0) {
+      // ── Core: fetch reply + render ────────────────────────────────────────
+      async function fetchAndRenderReply(userMessage = '', _retryCount = 0) {
         if (isSubmitting && _retryCount === 0) return;
         isSubmitting = true;
         if (_retryCount === 0) addTypingIndicator();
         try {
-          const response = await authFetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: userMessage }) });
+          const response = await authFetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: userMessage })
+          });
           const data = await response.json();
+
           if (!response.ok) {
-            if (response.status === 429) {
-              if (_retryCount < 3) {
-                const waitSec = Math.min(12 * Math.pow(2, _retryCount), 60);
-                console.log(`[chat] 429 rate limited, auto-retrying in ${waitSec}s (attempt ${_retryCount + 1}/3)...`);
-                await new Promise(r => setTimeout(r, waitSec * 1000));
-                return fetchAndRenderReply(userMessage, _retryCount + 1);
-              }
-              removeTypingIndicator();
-              addMessage(personaName, data.error || 'I am a bit busy right now - try again in a minute.', false);
-              return;
+            if (response.status === 429 && _retryCount < 3) {
+              const waitSec = Math.min(12 * Math.pow(2, _retryCount), 60);
+              console.log(`[chat] 429 – retrying in ${waitSec}s (attempt ${_retryCount + 1}/3)`);
+              await new Promise(r => setTimeout(r, waitSec * 1000));
+              return fetchAndRenderReply(userMessage, _retryCount + 1);
             }
-            throw new Error(data.error || 'Server error');
+            removeTypingIndicator();
+            addMessage(personaName, data.error || 'I am a bit busy right now – try again in a minute.', false);
+            return;
           }
           await renderResponse(data);
         } catch (err) {
           console.error('[fetchAndRenderReply]', err);
           removeTypingIndicator();
           addMessage(personaName, err.message || 'Oops, something went wrong.', false);
-        } finally { isSubmitting = false; }
-      }
-
-      async function renderResponse(data) {
-        await new Promise(r => setTimeout(r, 600));
-        removeTypingIndicator();
-        const replyText = data.response || '(no response)';
-        const bubbleElements = createAIMessageBubble();
-        if (!bubbleElements) return;
-        await typeTextIntoElement(bubbleElements.textElement, replyText);
-        const speakWithBrowserTTS = (text) => {
-          try {
-            if (!text || !('speechSynthesis' in window)) return false;
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 1.0;
-            utterance.pitch = 1.0;
-            utterance.lang = 'en-US';
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(utterance);
-            return true;
-          } catch (e) {
-            return false;
-          }
-        };
-
-        if (data.audioUrl) {
-          const resolvedAudioUrl = resolveApiMediaUrl(data.audioUrl);
-          const audio = new Audio(resolvedAudioUrl);
-          audio.play().catch(err => {
-            console.error('Audio play failed:', err);
-            speakWithBrowserTTS(replyText);
-          });
-          const playBtn = document.createElement('button');
-          playBtn.className = 'text-gray-500 hover:text-primary transition-colors duration-200';
-          playBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:14px">volume_up</span>`;
-          playBtn.title = 'Play audio';
-          playBtn.onclick = () => {
-            audio.currentTime = 0;
-            audio.play().catch(e => {
-              console.error(e);
-              speakWithBrowserTTS(replyText);
-            });
-          };
-          bubbleElements.senderInfoContainer.appendChild(playBtn);
-        } else {
-          speakWithBrowserTTS(replyText);
+        } finally {
+          isSubmitting = false;
         }
       }
 
+      async function renderResponse(data) {
+        // Small UX delay so typing indicator is visible
+        await new Promise(r => setTimeout(r, 600));
+        removeTypingIndicator();
+
+        const replyText = data.response || '(no response)';
+
+        // Build the message bubble
+        const bubbleElements = createAIMessageBubble();
+        if (!bubbleElements) return;
+
+        // Type out the text
+        await typeTextIntoElement(bubbleElements.textElement, replyText);
+
+        // ── ElevenLabs audio ──────────────────────────────────────────────
+        if (data.audioUrl) {
+          // Play immediately (works when triggered by the user's send-click gesture)
+          const audio = playElevenLabsAudio(data.audioUrl);
+
+          // Add a replay / stop button next to the persona name
+          const playBtn = document.createElement('button');
+          playBtn.className = 'text-gray-500 hover:text-primary transition-colors duration-200 ml-1';
+          playBtn.title = 'Play / replay audio';
+          playBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">volume_up</span>`;
+
+          if (audio) {
+            // Pulse while playing
+            audio.addEventListener('play',  () => playBtn.querySelector('span').classList.add('audio-playing'));
+            audio.addEventListener('pause', () => playBtn.querySelector('span').classList.remove('audio-playing'));
+            audio.addEventListener('ended', () => playBtn.querySelector('span').classList.remove('audio-playing'));
+          }
+
+          playBtn.addEventListener('click', () => {
+            // Re-play from the server URL each time (cached by browser)
+            const a = playElevenLabsAudio(data.audioUrl);
+            if (a) {
+              a.addEventListener('play',  () => playBtn.querySelector('span').classList.add('audio-playing'));
+              a.addEventListener('pause', () => playBtn.querySelector('span').classList.remove('audio-playing'));
+              a.addEventListener('ended', () => playBtn.querySelector('span').classList.remove('audio-playing'));
+            }
+          });
+
+          bubbleElements.senderInfoContainer.appendChild(playBtn);
+        }
+        // NOTE: No browser TTS fallback — we only use ElevenLabs.
+      }
+
+      // ── History ───────────────────────────────────────────────────────────
       async function loadAndRenderHistory() {
         try {
           const response = await authFetch('/get-chat-history');
           if (!response.ok) throw new Error('Bad response');
           const history = await response.json();
-          if (history && history.length > 0) {
+          if (history?.length > 0) {
             chatContainer.innerHTML = '';
             let lastRole = null, lastText = null;
             for (const message of history) {
               const text = message.parts?.[0]?.text || '';
               if (text === lastText && message.role === lastRole) continue;
               addMessage(message.role === 'user' ? 'You' : personaName, text, message.role === 'user');
-              lastRole = message.role;
-              lastText = text;
+              lastRole = message.role; lastText = text;
             }
           }
           return Array.isArray(history) ? history.length : 0;
         } catch (error) {
-          console.error("Failed to load chat history:", error);
+          console.error('Failed to load chat history:', error);
           return 0;
         }
       }
 
       async function tryInitialGreeting() {
-        if (!personaData || !personaData.username) {
+        if (!personaData?.username) {
           addMessage(personaName, 'Please create a persona first.');
           setTimeout(() => { window.location.href = '/add-username.html'; }, 1500);
           return;
         }
         const loaded = await loadAndRenderHistory();
         if (loaded === 0) {
-          // Request a canned greeting (no Groq call, just a hello)
           addTypingIndicator();
           try {
-            const response = await authFetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '' }) });
+            const response = await authFetch('/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: '' })
+            });
             const data = await response.json();
             if (response.ok && data.response) {
               await new Promise(r => setTimeout(r, 400));
               removeTypingIndicator();
               const bubbleElements = createAIMessageBubble();
               if (bubbleElements) await typeTextIntoElement(bubbleElements.textElement, data.response);
+              // Play greeting audio if present
+              if (data.audioUrl) {
+                const audio = playElevenLabsAudio(data.audioUrl);
+                // (no play button added to greeting bubble for brevity)
+              }
             } else {
               removeTypingIndicator();
             }
@@ -663,7 +696,6 @@
       function populatePersonaSidebar() {
         const personaContainer = document.getElementById('persona-info');
         if (!personaContainer) return;
-
         if (!personaData) {
           personaContainer.innerHTML = `
             <div class="glass rounded-xl p-4 text-center">
@@ -674,15 +706,14 @@
             </div>`;
           return;
         }
-
-        const avatarUrl = aiPersonaPicUrl || '';
-        const voiceHtml = voiceInfo ? `<div class="voice-indicator"><span class="material-symbols-outlined">record_voice_over</span><span>${escapeHtml(voiceInfo)}</span></div>` : '';
-
+        const voiceHtml = voiceInfo
+          ? `<div class="voice-indicator"><span class="material-symbols-outlined">record_voice_over</span><span>${escapeHtml(voiceInfo)}</span></div>`
+          : '';
         personaContainer.innerHTML = `
           <div class="glass rounded-xl p-4 space-y-4">
             <div class="flex items-center gap-3">
               <div class="insta-ring-sm shrink-0">
-                <div class="w-12 h-12 rounded-full bg-cover bg-center" style="background-image:url('${avatarUrl}')"></div>
+                <div class="w-12 h-12 rounded-full bg-cover bg-center" style="background-image:url('${aiPersonaPicUrl || ''}')"></div>
               </div>
               <div class="min-w-0">
                 <h4 class="text-sm font-bold text-white truncate">${escapeHtml(personaData.name || '')}</h4>
@@ -696,19 +727,15 @@
               <button id="load-insta-btn" class="px-3 py-1 rounded-lg bg-primary/20 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors">Refresh Photos</button>
             </div>
           </div>`;
-
-        const loadInstaBtn = personaContainer.querySelector('#load-insta-btn');
-        if (loadInstaBtn) {
-          loadInstaBtn.addEventListener('click', async () => {
-            if (!personaData?.username) return;
-            const imgs = await fetchInstagramPosts(personaData.username, DEFAULT_IMAGE_LIMIT);
-            renderCarousel(imgs);
-          });
-        }
+        personaContainer.querySelector('#load-insta-btn')?.addEventListener('click', async () => {
+          if (!personaData?.username) return;
+          const imgs = await fetchInstagramPosts(personaData.username, DEFAULT_IMAGE_LIMIT);
+          renderCarousel(imgs);
+        });
       }
 
-      // â”€â”€ Event listeners â”€â”€
-      if (chatForm) chatForm.addEventListener('submit', async (e) => {
+      // ── Event listeners ───────────────────────────────────────────────────
+      chatForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = messageInput.value.trim();
         if (!msg || isSubmitting) return;
@@ -717,57 +744,45 @@
         await fetchAndRenderReply(msg);
       });
 
-      if (newChatBtn) newChatBtn.addEventListener('click', async () => {
+      newChatBtn?.addEventListener('click', async () => {
         newChatBtn.disabled = true;
-        try {
-          await authFetch('/new-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-        } catch (e) { console.error(e); }
+        try { await authFetch('/new-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); } catch (e) { console.error(e); }
         localStorage.removeItem('personaData');
         localStorage.removeItem('aiPersonaPic');
         window.location.href = '/add-username.html';
       });
 
-      // Clear chat history (keep persona)
-      const clearChatBtn = document.getElementById('clear-chat-btn');
-      const logoutBtn = document.getElementById('logout-btn');
-      if (clearChatBtn) clearChatBtn.addEventListener('click', async () => {
+      document.getElementById('clear-chat-btn')?.addEventListener('click', async () => {
         if (!confirm('Clear all messages? The persona will stay.')) return;
-        clearChatBtn.disabled = true;
-        clearChatBtn.style.opacity = '0.5';
+        const btn = document.getElementById('clear-chat-btn');
+        btn.disabled = true; btn.style.opacity = '0.5';
         try {
           await authFetch('/api/chat-history', { method: 'DELETE' });
-          // Reset chat container to initial state
           chatContainer.innerHTML = `
             <div class="flex flex-col gap-3 animate-fade-up">
               <h2 class="text-2xl font-bold text-white">Chat with an <span class="instagram-gradient">Instagram</span> Persona</h2>
               <p class="text-sm text-gray-400">Start a conversation with an AI that mimics a personality from an Instagram profile.</p>
             </div>`;
-          // Trigger a fresh canned greeting (no Groq call)
           await tryInitialGreeting();
         } catch (e) { console.error('[clear-chat]', e); }
-        clearChatBtn.disabled = false;
-        clearChatBtn.style.opacity = '1';
+        btn.disabled = false; btn.style.opacity = '1';
       });
 
-      // Logout handler â€” clear everything and go to login
-      const logoutHandler = () => {
+      document.getElementById('logout-btn')?.addEventListener('click', () => {
         localStorage.removeItem('token');
         localStorage.removeItem('userEmail');
         localStorage.removeItem('personaData');
         localStorage.removeItem('aiPersonaPic');
         window.location.href = '/login.html';
-      };
-      if (logoutBtn) logoutBtn.addEventListener('click', logoutHandler);
+      });
 
-      // auto-load instagram
+      // Auto-load Instagram photos
       (async () => {
         if (!personaData?.username) return;
         await new Promise(r => setTimeout(r, 500));
         const imgs = await fetchInstagramPosts(personaData.username, DEFAULT_IMAGE_LIMIT);
         if (imgs.length) renderCarousel(imgs);
       })();
-
-      // Removed focus-based history reload â€” it caused stale messages to reappear
 
       populatePersonaSidebar();
       loadAdminUsagePill();
@@ -777,5 +792,3 @@
   </script>
 </body>
 </html>
-
-
